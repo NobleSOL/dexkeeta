@@ -21,7 +21,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { KeetaPoolCard, KeetaPoolCardData } from "@/components/keeta/KeetaPoolCard";
-import { generateWallet as generateWalletClient, getAddressFromSeed, fetchBalances, fetchLiquidityPositions, fetchPools, getSwapQuote as getSwapQuoteClient } from "@/lib/keeta-client";
+import { generateWallet as generateWalletClient, getAddressFromSeed, fetchBalances, fetchLiquidityPositions, fetchPools, getSwapQuote as getSwapQuoteClient, executeSwap as executeSwapClient } from "@/lib/keeta-client";
 
 // API base URL - uses same origin as frontend (Vite dev server on 8080)
 const API_BASE = `${window.location.origin}/api`;
@@ -312,6 +312,8 @@ export default function KeetaDex() {
 
       // Determine tokenOut (the opposite token in the pool)
       const tokenOut = pool.tokenA === swapTokenIn ? pool.tokenB : pool.tokenA;
+      const tokenInSymbol = pool.tokenA === swapTokenIn ? pool.symbolA : pool.symbolB;
+      const tokenOutSymbol = pool.tokenA === swapTokenIn ? pool.symbolB : pool.symbolA;
 
       // Use client-side swap quote calculation
       const quote = await getSwapQuoteClient(
@@ -323,9 +325,12 @@ export default function KeetaDex() {
 
       if (quote) {
         setSwapQuote({
-          amountOut: quote.amountOutHuman.toString(),
-          priceImpact: quote.priceImpact,
-          minimumReceived: (Number(quote.minimumReceived) / 1e9).toString(),
+          amountOut: quote.amountOutHuman.toFixed(6),
+          amountOutHuman: quote.amountOutHuman.toFixed(6),
+          priceImpact: quote.priceImpact.toFixed(2),
+          minimumReceived: (Number(quote.minimumReceived) / 1e9).toFixed(6),
+          feeAmountHuman: `${quote.feeAmountHuman.toFixed(6)} ${tokenInSymbol}`,
+          tokenOutSymbol,
         });
       } else {
         setSwapQuote(null);
@@ -1071,7 +1076,7 @@ export default function KeetaDex() {
                   <div className="rounded-lg bg-secondary/40 p-3 space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Expected Output</span>
-                      <span className="font-medium">{swapQuote.amountOutHuman}</span>
+                      <span className="font-medium">{swapQuote.amountOutHuman} {swapQuote.tokenOutSymbol}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Fee</span>
