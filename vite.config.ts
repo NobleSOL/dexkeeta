@@ -3,13 +3,23 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(async ({ mode }) => {
   const plugins = [react()];
 
   // Only add express plugin in development mode
   // In production, the server is run separately via node-build.ts
-  if (mode === 'development') {
-    plugins.push(expressPlugin());
+  if (mode === 'development' && process.env.NODE_ENV !== 'production') {
+    // Dynamically import the plugin only in dev mode
+    const expressPlugin: Plugin = {
+      name: "express-plugin",
+      apply: "serve",
+      async configureServer(server) {
+        const { createServer } = await import("./server/index.js");
+        const app = createServer();
+        server.middlewares.use(app);
+      },
+    };
+    plugins.push(expressPlugin);
   }
 
   return {
@@ -50,18 +60,3 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
-
-function expressPlugin(): Plugin {
-  return {
-    name: "express-plugin",
-    apply: "serve", // Only apply during development (serve mode)
-    async configureServer(server) {
-      // Dynamically import server only during dev mode
-      const { createServer } = await import("./server");
-      const app = createServer();
-
-      // Add Express app as middleware to Vite dev server
-      server.middlewares.use(app);
-    },
-  };
-}
