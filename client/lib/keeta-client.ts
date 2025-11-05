@@ -533,25 +533,37 @@ export async function executeSwap(
     console.log('📤 Publishing transaction...');
     const result = await client.publishBuilder(builder);
     console.log('✅ Transaction published:', result);
+    console.log('📦 Builder blocks:', builder.blocks);
 
-    // Extract block hash from the builder
+    // Extract block hash from the second block (index 1)
+    // The first block is the receive, the second block is the send/swap
     let blockHash = null;
-    if (builder.blocks && builder.blocks.length > 0) {
-      // Try to get hash from the last block
-      const block = builder.blocks[builder.blocks.length - 1];
+    if (builder.blocks && builder.blocks.length > 1) {
+      const block = builder.blocks[1]; // Get second block
+      console.log('📦 Second block:', block);
+
       if (block && block.hash) {
         // Convert BlockHash to hex string
-        blockHash = typeof block.hash === 'string'
-          ? block.hash
-          : block.hash.toString('hex').toUpperCase();
+        if (typeof block.hash === 'string') {
+          blockHash = block.hash.toUpperCase();
+        } else if (block.hash.toString) {
+          // Try toString first
+          const hashStr = block.hash.toString();
+          if (hashStr.match(/^[0-9A-Fa-f]+$/)) {
+            blockHash = hashStr.toUpperCase();
+          } else if (block.hash.toString('hex')) {
+            // If toString doesn't give hex, try toString('hex')
+            blockHash = block.hash.toString('hex').toUpperCase();
+          }
+        }
       }
     }
 
-    console.log('✅ Block hash:', blockHash);
+    console.log('✅ Block hash extracted:', blockHash);
 
     return {
       success: true,
-      txHash: blockHash || 'unknown',
+      blockHash: blockHash || null,
     };
   } catch (error: any) {
     console.error('❌ Swap execution error:', error);

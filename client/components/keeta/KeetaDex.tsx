@@ -399,9 +399,9 @@ export default function KeetaDex() {
       );
 
       if (result.success) {
-        // Build explorer link
-        const explorerUrl = result.txHash
-          ? `https://explorer.test.keeta.com/tx/${result.txHash}`
+        // Build explorer link using block hash
+        const explorerUrl = result.blockHash
+          ? `https://explorer.test.keeta.com/block/${result.blockHash}`
           : `https://explorer.test.keeta.com/account/${wallet.address}`;
 
         toast({
