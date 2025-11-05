@@ -221,7 +221,7 @@ export class Pool {
       account: poolAccount,
     });
 
-    const totalAmountOutPulled = amountOut;
+    let totalAmountOutPulled = amountOut;
 
     // Handle rounding dust: if we didn't pull enough due to rounding, pull from first LP
     if (totalAmountOutPulled < amountOut) {

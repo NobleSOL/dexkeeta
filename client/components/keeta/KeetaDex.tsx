@@ -22,8 +22,8 @@ import {
 } from "lucide-react";
 import { KeetaPoolCard, KeetaPoolCardData } from "@/components/keeta/KeetaPoolCard";
 
-// API base URL
-const API_BASE = "http://localhost:8888/api";
+// API base URL - uses same origin as frontend (Vite dev server on 8080)
+const API_BASE = `${window.location.origin}/api`;
 
 type KeetaWallet = {
   address: string;

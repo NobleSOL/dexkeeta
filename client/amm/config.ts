@@ -14,13 +14,10 @@ export function isAddress(v?: string): v is `0x${string}` {
 /**
  * Get API base URL based on current network
  * - Base: Uses current origin (vite dev server on 8080 or deployed URL)
- * - Keeta: Uses localhost:8888 (Keeta backend server)
+ * - Keeta: Uses current origin (Keeta backend integrated into Vite dev server)
  */
 export function getApiBaseUrl(network: "base" | "keeta"): string {
-  if (network === "keeta") {
-    return "http://localhost:8888";
-  }
-  // For Base, use current origin (works in dev and production)
+  // Both Base and Keeta use the same origin (Vite dev server has Express middleware)
   return typeof window !== "undefined" ? window.location.origin : "";
 }
 

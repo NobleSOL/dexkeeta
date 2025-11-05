@@ -15,28 +15,46 @@ import Portfolio from "./pages/Portfolio";
 import Header from "./components/layout/Header";
 import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "./wallet/config";
+import { NetworkProvider, useNetwork } from "./contexts/NetworkContext";
+import KeetaDex from "./components/keeta/KeetaDex";
 
 const queryClient = new QueryClient();
+
+const AppContent = () => {
+  const { network } = useNetwork();
+
+  // When Keeta network is selected, show the Keeta DEX
+  if (network === "Keeta") {
+    return <KeetaDex />;
+  }
+
+  // Otherwise show the Base DEX routes
+  return (
+    <Routes>
+      <Route path="/" element={<Index />} />
+      <Route path="/pool" element={<Pool />} />
+      <Route path="/portfolio" element={<Portfolio />} />
+      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
 
 const App = () => (
   <WagmiProvider config={wagmiConfig}>
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Header />
-          {/* Global slippage dialog portal */}
-          <SlippagePortal />
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/pool" element={<Pool />} />
-            <Route path="/portfolio" element={<Portfolio />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <NetworkProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Header />
+            {/* Global slippage dialog portal */}
+            <SlippagePortal />
+            <AppContent />
+          </BrowserRouter>
+        </TooltipProvider>
+      </NetworkProvider>
     </QueryClientProvider>
   </WagmiProvider>
 );

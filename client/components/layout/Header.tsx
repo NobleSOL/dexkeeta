@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Wallet2, Menu } from "lucide-react";
 import ConnectButton from "@/components/wallet/ConnectButton";
+import { useNetwork } from "@/contexts/NetworkContext";
 
 const NavItem = ({ to, label }: { to: string; label: string }) => (
   <NavLink
@@ -23,7 +24,7 @@ const NavItem = ({ to, label }: { to: string; label: string }) => (
 
 export function Header() {
   const location = useLocation();
-  const [network, setNetwork] = useState<"Base" | "Keeta">("Base");
+  const { network, setNetwork } = useNetwork();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
