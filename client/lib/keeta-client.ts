@@ -102,27 +102,49 @@ export async function fetchBalances(seed: string, accountIndex: number = 0) {
     console.log('✅ Client created with account');
     const balances = await client.allBalances();
     console.log('✅ Raw balances from blockchain:', balances);
+    console.log('📊 Balance structure:', balances.length > 0 ? Object.keys(balances[0]) : 'empty');
+
+    // Handle case where balances might be in a different format
+    let balanceArray = balances;
+    if (!Array.isArray(balances)) {
+      console.log('⚠️ Balances is not an array, checking for data property...');
+      if (balances.balances && Array.isArray(balances.balances)) {
+        balanceArray = balances.balances;
+      } else {
+        console.error('❌ Cannot extract balance array from response');
+        return [];
+      }
+    }
 
     // Format balances with metadata
     const formattedBalances = await Promise.all(
-      balances.map(async (b: any) => {
+      balanceArray.map(async (b: any) => {
         try {
-          const metadata = await fetchTokenMetadata(b.token);
-          const rawBalance = Number(b.balance) || 0;
+          console.log('🔍 Processing balance item:', b);
+
+          // Extract token address (might be different property names)
+          const tokenAddress = b.token || b.account || b.address;
+          const balanceValue = b.balance || b.amount || b.value || '0';
+
+          console.log('  Token:', tokenAddress);
+          console.log('  Balance:', balanceValue);
+
+          const metadata = await fetchTokenMetadata(tokenAddress);
+          const rawBalance = Number(balanceValue) || 0;
           const decimals = metadata.decimals || 9;
           const balanceFormatted = rawBalance / (10 ** decimals);
 
           return {
-            address: b.token,
+            address: tokenAddress,
             symbol: metadata.symbol || 'UNKNOWN',
-            balance: b.balance?.toString() || '0',
+            balance: balanceValue?.toString() || '0',
             balanceFormatted: isNaN(balanceFormatted) ? '0.000000000' : balanceFormatted.toFixed(decimals),
             decimals
           };
         } catch (err) {
           console.error('Error formatting balance:', err);
           return {
-            address: b.token,
+            address: b.token || b.account || 'unknown',
             symbol: 'ERROR',
             balance: '0',
             balanceFormatted: '0.000000000',
