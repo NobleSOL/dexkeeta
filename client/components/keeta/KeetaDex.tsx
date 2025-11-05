@@ -217,7 +217,7 @@ export default function KeetaDex() {
 
       // Fetch balances from blockchain (client-side)
       console.log('📊 Fetching balances from Keeta blockchain...');
-      const tokens = await fetchBalances(address);
+      const tokens = await fetchBalances(seed, accountIndex);
       console.log('✅ Balances fetched:', tokens);
 
       const walletData: KeetaWallet = {

@@ -7,13 +7,6 @@ const KEETA_NODE = 'https://api.test.keeta.com';
 const KEETA_NETWORK = 'test';
 
 /**
- * Create a Ledger client for read-only operations (no signing)
- */
-export function createKeetaLedger() {
-  return new KeetaSDK.Ledger({ network: KEETA_NETWORK, nodeUrl: KEETA_NODE });
-}
-
-/**
  * Create a UserClient for read-only operations (no signing)
  */
 export function createKeetaClient() {
@@ -67,14 +60,15 @@ export function generateWallet(): { seed: string; address: string } {
 }
 
 /**
- * Fetch token balances for an address
+ * Fetch token balances for an address using a seed
+ * Note: This requires the seed to create a UserClient instance
  */
-export async function fetchBalances(address: string) {
+export async function fetchBalances(seed: string, accountIndex: number = 0) {
   try {
-    console.log('🔍 fetchBalances called for:', address);
-    const ledger = createKeetaLedger();
-    console.log('✅ Ledger created');
-    const balances = await ledger.getAllBalances(address);
+    console.log('🔍 fetchBalances called');
+    const client = createKeetaClientFromSeed(seed, accountIndex);
+    console.log('✅ Client created with account');
+    const balances = await client.allBalances();
     console.log('✅ Raw balances from blockchain:', balances);
 
     // Format balances with metadata
@@ -166,54 +160,20 @@ export async function fetchTokenMetadata(tokenAddress: string) {
 }
 
 /**
- * Fetch available pools (from API first, then enrich with on-chain data)
+ * Fetch available pools (from API with on-chain data already included)
+ * Pool reserves need to be fetched server-side since we can't query arbitrary addresses client-side
  */
 export async function fetchPools() {
   try {
-    // Fetch pool list from API
+    // Fetch pool list from API (with reserves already included)
     const response = await fetch(`${window.location.origin}/api/pools`);
     if (!response.ok) throw new Error('Failed to fetch pools');
 
     const data = await response.json();
     const poolList = data.pools || [];
 
-    // Enrich each pool with on-chain reserve data
-    const ledger = createKeetaLedger();
-    const enrichedPools = await Promise.all(
-      poolList.map(async (pool: any) => {
-        try {
-          // Fetch reserves from pool account
-          const balances = await ledger.getAllBalances(pool.poolAddress);
-
-          const reserveA = balances.find((b: any) => b.token === pool.tokenA)?.balance || '0';
-          const reserveB = balances.find((b: any) => b.token === pool.tokenB)?.balance || '0';
-
-          // Fetch metadata for formatting
-          const metadataA = await fetchTokenMetadata(pool.tokenA);
-          const metadataB = await fetchTokenMetadata(pool.tokenB);
-
-          const reserveAHuman = Number(reserveA) / (10 ** metadataA.decimals);
-          const reserveBHuman = Number(reserveB) / (10 ** metadataB.decimals);
-
-          const price = reserveAHuman > 0 ? (reserveBHuman / reserveAHuman).toFixed(6) : '0';
-
-          return {
-            ...pool,
-            reserveA: reserveA.toString(),
-            reserveB: reserveB.toString(),
-            reserveAHuman,
-            reserveBHuman,
-            price,
-            totalShares: '0', // Not tracked yet
-          };
-        } catch (err) {
-          console.error('Error enriching pool:', err);
-          return pool;
-        }
-      })
-    );
-
-    return enrichedPools;
+    // Return pools as-is since server should enrich them
+    return poolList;
   } catch (error) {
     console.error('Error fetching pools:', error);
     return [];
