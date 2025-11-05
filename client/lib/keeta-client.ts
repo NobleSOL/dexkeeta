@@ -28,18 +28,50 @@ function hexToBytes(hex: string): Uint8Array {
  * Create a UserClient from a seed for signing transactions
  */
 export function createKeetaClientFromSeed(seed: string, accountIndex: number = 0) {
-  const seedBytes = hexToBytes(seed);
-  const account = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
-  return KeetaSDK.UserClient.fromNetwork(KEETA_NETWORK as any, account);
+  try {
+    console.log('🔧 Creating client from seed...');
+    const seedBytes = hexToBytes(seed);
+    console.log('✅ Seed bytes created:', seedBytes.length, 'bytes');
+
+    // Try to access Account class
+    if (!KeetaSDK.lib || !KeetaSDK.lib.Account) {
+      console.error('❌ KeetaSDK.lib.Account not available!');
+      console.log('Available in KeetaSDK:', Object.keys(KeetaSDK).slice(0, 20));
+      if (KeetaSDK.lib) {
+        console.log('Available in KeetaSDK.lib:', Object.keys(KeetaSDK.lib));
+      }
+      throw new Error('Account class not available in SDK');
+    }
+
+    console.log('✅ Account class found');
+    const account = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
+    console.log('✅ Account created');
+
+    return KeetaSDK.UserClient.fromNetwork(KEETA_NETWORK as any, account);
+  } catch (error) {
+    console.error('❌ Error in createKeetaClientFromSeed:', error);
+    throw error;
+  }
 }
 
 /**
  * Get account address from seed
  */
 export function getAddressFromSeed(seed: string, accountIndex: number = 0): string {
-  const seedBytes = hexToBytes(seed);
-  const account = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
-  return account.publicKeyString.get();
+  try {
+    console.log('🔧 Getting address from seed...');
+    const seedBytes = hexToBytes(seed);
+
+    if (!KeetaSDK.lib || !KeetaSDK.lib.Account) {
+      throw new Error('Account class not available in SDK');
+    }
+
+    const account = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
+    return account.publicKeyString.get();
+  } catch (error) {
+    console.error('❌ Error in getAddressFromSeed:', error);
+    throw error;
+  }
 }
 
 /**
