@@ -237,3 +237,52 @@ export async function fetchPools() {
     return [];
   }
 }
+
+/**
+ * Fetch user's liquidity positions from blockchain
+ * This queries the user's token balances and identifies LP tokens for known pools
+ */
+export async function fetchLiquidityPositions(seed: string, accountIndex: number = 0) {
+  try {
+    console.log('🔍 Fetching liquidity positions...');
+
+    // Get all user balances
+    const balances = await fetchBalances(seed, accountIndex);
+    console.log('✅ User balances:', balances);
+
+    // Get list of known pools
+    const pools = await fetchPools();
+    console.log('✅ Known pools:', pools);
+
+    // For each pool, check if user has LP tokens (liquidity in the pool)
+    const positions = [];
+
+    for (const pool of pools) {
+      // Check if user has any balance in the pool address itself
+      // In Keeta's user-owned pool model, users hold their liquidity in the pool storage account
+      const poolBalance = balances.find(b => b.address === pool.poolAddress);
+
+      if (poolBalance && Number(poolBalance.balance) > 0) {
+        // User has liquidity in this pool
+        positions.push({
+          poolAddress: pool.poolAddress,
+          tokenA: pool.tokenA,
+          tokenB: pool.tokenB,
+          symbolA: pool.symbolA,
+          symbolB: pool.symbolB,
+          liquidity: poolBalance.balance,
+          sharePercent: 0, // TODO: Calculate share percentage
+          amountA: '0', // TODO: Calculate underlying token amounts
+          amountB: '0',
+          timestamp: Date.now()
+        });
+      }
+    }
+
+    console.log('✅ Found positions:', positions);
+    return positions;
+  } catch (error) {
+    console.error('Error fetching liquidity positions:', error);
+    return [];
+  }
+}

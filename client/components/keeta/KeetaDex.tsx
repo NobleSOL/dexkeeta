@@ -21,7 +21,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { KeetaPoolCard, KeetaPoolCardData } from "@/components/keeta/KeetaPoolCard";
-import { generateWallet as generateWalletClient, getAddressFromSeed, fetchBalances } from "@/lib/keeta-client";
+import { generateWallet as generateWalletClient, getAddressFromSeed, fetchBalances, fetchLiquidityPositions } from "@/lib/keeta-client";
 
 // API base URL - uses same origin as frontend (Vite dev server on 8080)
 const API_BASE = `${window.location.origin}/api`;
@@ -295,19 +295,15 @@ export default function KeetaDex() {
   async function fetchPositions() {
     if (!wallet) return;
 
-    // TODO: Implement client-side position fetching
-    // For now, return empty positions since /api/liquidity/positions doesn't exist on Vercel
-    console.log('📋 Position fetching not yet implemented for client-side');
-    setPositions([]);
-
-    // Old server-side code (commented out):
-    // try {
-    //   const res = await fetch(`${API_BASE}/liquidity/positions/${wallet.address}`);
-    //   const data = await res.json();
-    //   setPositions(data.positions || []);
-    // } catch (error) {
-    //   console.error("Failed to fetch positions:", error);
-    // }
+    try {
+      console.log('📋 Fetching positions client-side...');
+      const userPositions = await fetchLiquidityPositions(wallet.seed, wallet.accountIndex || 0);
+      setPositions(userPositions);
+      console.log('✅ Positions loaded:', userPositions);
+    } catch (error) {
+      console.error("Failed to fetch positions:", error);
+      setPositions([]);
+    }
   }
 
   async function getSwapQuote() {
