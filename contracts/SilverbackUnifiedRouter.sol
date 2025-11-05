@@ -46,6 +46,11 @@ contract SilverbackUnifiedRouter {
     uint16 public constant MAX_FEE_BPS = 1000;
     address public constant NATIVE = address(0);
 
+    // Reentrancy guard
+    uint256 private constant UNLOCKED = 1;
+    uint256 private constant LOCKED = 2;
+    uint256 private _lockStatus = UNLOCKED;
+
     // ========== EVENTS ==========
     event OwnerChanged(address newOwner);
     event FeeUpdated(uint16 newFeeBps);
@@ -60,6 +65,13 @@ contract SilverbackUnifiedRouter {
     modifier ensure(uint deadline) {
         require(block.timestamp <= deadline, "EXPIRED");
         _;
+    }
+
+    modifier nonReentrant() {
+        require(_lockStatus == UNLOCKED, "LOCKED");
+        _lockStatus = LOCKED;
+        _;
+        _lockStatus = UNLOCKED;
     }
 
     // Receive ETH from WETH contract
@@ -165,6 +177,7 @@ contract SilverbackUnifiedRouter {
     function swapAndForward(SwapParams calldata p, PermitData calldata permit)
         external
         payable
+        nonReentrant
         ensure(p.deadline)
     {
         if (permit.token != address(0)) {
@@ -181,7 +194,7 @@ contract SilverbackUnifiedRouter {
         _swapAndForward(p);
     }
 
-    function swapAndForward(SwapParams calldata p) external payable ensure(p.deadline) {
+    function swapAndForward(SwapParams calldata p) external payable nonReentrant ensure(p.deadline) {
         _swapAndForward(p);
     }
 
@@ -247,7 +260,7 @@ contract SilverbackUnifiedRouter {
         uint amountBMin,
         address to,
         uint deadline
-    ) external ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
+    ) external nonReentrant ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
         if (ISilverbackFactory(factory).getPair(tokenA, tokenB) == address(0)) {
             ISilverbackFactory(factory).createPair(tokenA, tokenB);
         }
@@ -296,7 +309,7 @@ contract SilverbackUnifiedRouter {
         uint amountETHMin,
         address to,
         uint deadline
-    ) external payable ensure(deadline) returns (uint amountToken, uint amountETH, uint liquidity) {
+    ) external payable nonReentrant ensure(deadline) returns (uint amountToken, uint amountETH, uint liquidity) {
         // Create pair if it doesn't exist
         if (ISilverbackFactory(factory).getPair(token, WETH) == address(0)) {
             ISilverbackFactory(factory).createPair(token, WETH);
@@ -330,7 +343,7 @@ contract SilverbackUnifiedRouter {
         uint amountBMin,
         address to,
         uint deadline
-    ) external ensure(deadline) returns (uint amountA, uint amountB) {
+    ) external nonReentrant ensure(deadline) returns (uint amountA, uint amountB) {
         address pair = ISilverbackFactory(factory).getPair(tokenA, tokenB);
         _safeTransferFrom(pair, msg.sender, pair, liquidity);
         (uint amount0, uint amount1) = ISilverbackPair(pair).burn(to);
@@ -347,7 +360,7 @@ contract SilverbackUnifiedRouter {
         uint amountETHMin,
         address to,
         uint deadline
-    ) external ensure(deadline) returns (uint amountToken, uint amountETH) {
+    ) external nonReentrant ensure(deadline) returns (uint amountToken, uint amountETH) {
         address pair = ISilverbackFactory(factory).getPair(token, WETH);
         _safeTransferFrom(pair, msg.sender, pair, liquidity);
         (uint amount0, uint amount1) = ISilverbackPair(pair).burn(address(this));
@@ -367,7 +380,7 @@ contract SilverbackUnifiedRouter {
         address[] calldata path,
         address to,
         uint deadline
-    ) external ensure(deadline) returns (uint[] memory amounts) {
+    ) external nonReentrant ensure(deadline) returns (uint[] memory amounts) {
         // Calculate fee and net amount
         uint fee = (amountIn * feeBps) / 10_000;
         uint netIn = amountIn - fee;
@@ -388,7 +401,7 @@ contract SilverbackUnifiedRouter {
         address[] calldata path,
         address to,
         uint deadline
-    ) external payable ensure(deadline) returns (uint[] memory amounts) {
+    ) external payable nonReentrant ensure(deadline) returns (uint[] memory amounts) {
         require(path[0] == WETH, "INVALID_PATH");
 
         // Calculate fee and net amount
@@ -414,7 +427,7 @@ contract SilverbackUnifiedRouter {
         address[] calldata path,
         address to,
         uint deadline
-    ) external ensure(deadline) returns (uint[] memory amounts) {
+    ) external nonReentrant ensure(deadline) returns (uint[] memory amounts) {
         require(path[path.length - 1] == WETH, "INVALID_PATH");
 
         // Calculate fee and net amount

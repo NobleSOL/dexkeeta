@@ -778,24 +778,20 @@ export default function Pool() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex rounded-lg bg-secondary/60 p-1 text-xs border border-border/40">
                 <button
-                  className={`px-3 py-1.5 rounded-md transition-all ${
-                    version === "v2"
-                      ? "bg-brand text-white shadow-sm"
-                      : "hover:bg-secondary/80"
-                  }`}
-                  onClick={() => setVersion("v2")}
+                  className="px-3 py-1.5 rounded-md transition-all bg-brand text-white shadow-sm"
+                  disabled
                 >
-                  V2
+                  Classic Pools
                 </button>
                 <button
-                  className={`px-3 py-1.5 rounded-md transition-all ${
-                    version === "v3"
-                      ? "bg-brand text-white shadow-sm"
-                      : "hover:bg-secondary/80"
-                  }`}
-                  onClick={() => setVersion("v3")}
+                  className="px-3 py-1.5 rounded-md transition-all hover:bg-secondary/80 opacity-60 cursor-not-allowed relative group"
+                  disabled
+                  title="Coming soon"
                 >
-                  V3
+                  Concentrated
+                  <span className="ml-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">
+                    Soon
+                  </span>
                 </button>
               </div>
               <button
@@ -818,27 +814,8 @@ export default function Pool() {
               >
                 Manage Positions
               </button>
-              {version === "v3" && (
-                <div className="ml-2 flex items-center gap-2 text-xs">
-                  <span className="text-muted-foreground">Fee tier</span>
-                  <input
-                    value={feeTier}
-                    onChange={(e) =>
-                      setFeeTier(Number(e.target.value.replace(/[^0-9]/g, "")))
-                    }
-                    className="h-7 w-20 rounded-md border border-border/60 bg-secondary/60 px-2 text-right"
-                  />
-                </div>
-              )}
             </div>
             <div className="flex items-center gap-3 sm:self-auto">
-              <button
-                type="button"
-                className="rounded-lg bg-secondary/60 border border-border/40 px-3 py-1.5 text-xs font-medium hover:bg-secondary/80 transition-all"
-                onClick={handleCreatePool}
-              >
-                {version === "v2" ? "Create V2 Pair" : "Create V3 Pool"}
-              </button>
               <button
                 type="button"
                 className="text-xs text-sky-400 hover:text-sky-300 transition-colors font-medium"

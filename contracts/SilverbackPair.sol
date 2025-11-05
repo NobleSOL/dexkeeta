@@ -31,6 +31,11 @@ contract SilverbackPair is ISilverbackPair {
     uint8 private constant DECIMALS = 18;
     uint256 private constant MINIMUM_LIQUIDITY = 1000;
 
+    // Reentrancy guard
+    uint256 private constant UNLOCKED = 1;
+    uint256 private constant LOCKED = 2;
+    uint256 private _lockStatus = UNLOCKED;
+
     constructor() {
         factory = msg.sender;
         uint256 chainId;
@@ -112,7 +117,14 @@ contract SilverbackPair is ISilverbackPair {
         return (reserve0, reserve1, blockTimestampLast);
     }
 
-    function mint(address to) external override returns (uint256 liquidity) {
+    modifier nonReentrant() {
+        require(_lockStatus == UNLOCKED, "LOCKED");
+        _lockStatus = LOCKED;
+        _;
+        _lockStatus = UNLOCKED;
+    }
+
+    function mint(address to) external override nonReentrant returns (uint256 liquidity) {
         uint112 _reserve0 = reserve0;
         uint112 _reserve1 = reserve1;
         uint256 balance0 = IERC20(token0).balanceOf(address(this));
@@ -131,7 +143,7 @@ contract SilverbackPair is ISilverbackPair {
         emit Mint(msg.sender, amount0, amount1);
     }
 
-    function burn(address to) external override returns (uint256 amount0, uint256 amount1) {
+    function burn(address to) external override nonReentrant returns (uint256 amount0, uint256 amount1) {
         require(to != address(0), "ZERO_ADDRESS");
         uint256 balance0 = IERC20(token0).balanceOf(address(this));
         uint256 balance1 = IERC20(token1).balanceOf(address(this));
@@ -146,7 +158,7 @@ contract SilverbackPair is ISilverbackPair {
         emit Burn(msg.sender, amount0, amount1, to);
     }
 
-    function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external override {
+    function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external override nonReentrant {
         require(amount0Out > 0 || amount1Out > 0, "INSUFFICIENT_OUTPUT");
         require(to != token0 && to != token1, "INVALID_TO");
         (uint112 _reserve0, uint112 _reserve1, ) = (reserve0, reserve1, blockTimestampLast);

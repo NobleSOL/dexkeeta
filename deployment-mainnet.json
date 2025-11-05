@@ -1,15 +1,19 @@
 {
   "network": "base-mainnet",
   "chainId": 8453,
-  "deployer": "0x461C0AeC0eeA8Cd9C703f604ff51D8463b1f6BA8",
-  "timestamp": "2025-10-23T17:33:19.196Z",
+  "deployer": "0x9E753c5C0051277C2a9600FCDF14e28Eafd7A7db",
+  "timestamp": "2025-01-04T13:00:00.000Z",
   "contracts": {
-    "factory": "0x63FfE8C2d8D82eCd2C43e489a99c7e66902cD98a",
-    "router": "0x6FBe8fCA4EA7a81Bdd6AC258c4ed9E2C502b017C",
+    "factory": "0xd0918593070682AA60Ef6367FAd43A20acaEE94d",
+    "router": "0x565cBf0F3eAdD873212Db91896e9a548f6D64894",
     "weth": "0x4200000000000000000000000000000000000006"
   },
   "config": {
-    "feeRecipient": "0x461C0AeC0eeA8Cd9C703f604ff51D8463b1f6BA8",
+    "feeRecipient": "0xD34411a70EffbDd000c529bbF572082ffDcF1794",
     "feeBps": 30
+  },
+  "verified": {
+    "factory": "https://basescan.org/address/0xd0918593070682AA60Ef6367FAd43A20acaEE94d#code",
+    "router": "https://basescan.org/address/0x565cBf0F3eAdD873212Db91896e9a548f6D64894#code"
   }
 }

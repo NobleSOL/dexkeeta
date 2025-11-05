@@ -84,6 +84,11 @@ const erc20Abi = [
   },
 ] as const;
 
+// Blacklisted pool addresses (test pools, deprecated pools, etc.)
+const BLACKLISTED_POOLS = [
+  "0xC630C180e6C8eb0be3826D97A5766FfA3880BaDb", // WETH/SBTEST test pool
+].map(addr => addr.toLowerCase());
+
 interface ActivePoolsListProps {
   onManage: (pool: PoolCardData) => void;
 }
@@ -144,7 +149,12 @@ export function ActivePoolsList({ onManage }: ActivePoolsListProps) {
           try {
             const pairAddr = await factory.read.allPairs([BigInt(i)]);
             if (pairAddr && pairAddr !== "0x0000000000000000000000000000000000000000") {
-              pairAddresses.push(pairAddr as Address);
+              // Filter out blacklisted pools
+              if (!BLACKLISTED_POOLS.includes(pairAddr.toLowerCase())) {
+                pairAddresses.push(pairAddr as Address);
+              } else {
+                console.log('ActivePoolsList: Skipping blacklisted pool:', pairAddr);
+              }
             }
           } catch (err) {
             console.error(`Error fetching pair ${i}:`, err);

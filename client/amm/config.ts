@@ -1,7 +1,8 @@
 // HARDCODED for localhost development - env vars don't reload properly in Vite dev mode
 // For production (Vercel), these will be overridden by environment variables
-export const SILVERBACK_V2_FACTORY = "0xF925941026a46244dFFC236F2A01F1282ecFFa6d";
-export const SILVERBACK_V2_ROUTER = "0x46CC63663a5f7bD17c664BfFe35546f13B788303";
+// Updated with Base Mainnet deployment (verified contracts)
+export const SILVERBACK_V2_FACTORY = "0xd0918593070682AA60Ef6367FAd43A20acaEE94d";
+export const SILVERBACK_V2_ROUTER = "0x565cBf0F3eAdD873212Db91896e9a548f6D64894";
 
 // If using Uniswap V3-like periphery until Silverback V3 is deployed
 export const V3_POSITION_MANAGER = (import.meta as any).env?.VITE_V3_NFPM || ""; // NonfungiblePositionManager
