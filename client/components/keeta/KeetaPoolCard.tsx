@@ -29,12 +29,16 @@ export function KeetaPoolCard({
   pool: KeetaPoolCardData;
   onManage: (pool: KeetaPoolCardData) => void;
 }) {
+  // Handle undefined reserves gracefully
+  const reserveAHuman = pool.reserveAHuman ?? 0;
+  const reserveBHuman = pool.reserveBHuman ?? 0;
+
   // Calculate TVL display
-  const tvl = `${pool.reserveAHuman.toFixed(2)} ${pool.symbolA} + ${pool.reserveBHuman.toFixed(2)} ${pool.symbolB}`;
+  const tvl = `${reserveAHuman.toFixed(2)} ${pool.symbolA} + ${reserveBHuman.toFixed(2)} ${pool.symbolB}`;
 
   // Estimate APY (simplified - assumes daily volume is ~10% of TVL)
   const assumedDailyVolumePercent = 0.1;
-  const estimatedAPY = pool.reserveAHuman > 0
+  const estimatedAPY = reserveAHuman > 0
     ? ((assumedDailyVolumePercent * 0.003 * 365) * 100).toFixed(2)
     : "0.00";
 
@@ -44,7 +48,7 @@ export function KeetaPoolCard({
   const userAmountB = hasPosition ? parseFloat(pool.userPosition!.amountB) / Math.pow(10, pool.decimalsB || 9) : 0;
 
   // Estimated fee earnings (protocol fee goes to treasury, but LPs earn from price impact)
-  const estimatedDailyVolume = pool.reserveAHuman * 0.1;
+  const estimatedDailyVolume = reserveAHuman * 0.1;
   const totalDailyFees = estimatedDailyVolume * 0.003;
   const userDailyFees = hasPosition
     ? (totalDailyFees * pool.userPosition!.sharePercent / 100)
@@ -149,8 +153,8 @@ export function KeetaPoolCard({
 
       {/* Exchange Rate */}
       <div className="text-xs text-muted-foreground mb-3 space-y-0.5">
-        <div>1 {pool.symbolA} = {(pool.reserveBHuman / pool.reserveAHuman).toFixed(6)} {pool.symbolB}</div>
-        <div>1 {pool.symbolB} = {(pool.reserveAHuman / pool.reserveBHuman).toFixed(6)} {pool.symbolA}</div>
+        <div>1 {pool.symbolA} = {reserveAHuman > 0 ? (reserveBHuman / reserveAHuman).toFixed(6) : '0.000000'} {pool.symbolB}</div>
+        <div>1 {pool.symbolB} = {reserveBHuman > 0 ? (reserveAHuman / reserveBHuman).toFixed(6) : '0.000000'} {pool.symbolA}</div>
       </div>
 
       {/* Action buttons */}
