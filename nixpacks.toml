@@ -5,7 +5,13 @@ nixPkgs = ['nodejs_20', 'pnpm']
 cmds = ['pnpm install --frozen-lockfile']
 
 [phases.build]
-cmds = ['pnpm build']
+cmds = [
+  'pwd',
+  'ls -la',
+  'ls -la server/ || echo "server dir not found"',
+  'pnpm build:client',
+  'pnpm build:server'
+]
 
 [start]
 cmd = 'node dist/server/node-build.mjs'
