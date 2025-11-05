@@ -535,16 +535,16 @@ export async function executeSwap(
     console.log('✅ Transaction published:', result);
     console.log('📦 Builder blocks:', builder.blocks);
 
-    // Extract block hash from the last block (the actual swap)
+    // Extract block hash from the second block (index 1)
     // Transaction structure:
-    // Block 0: User sends fee to treasury
-    // Block 1: User sends input token to pool
-    // Block 2+: Pool sends output token to user (the actual swap we want to show)
+    // Block 0: User sends fee to treasury (08AA96A7...)
+    // Block 1: User sends input token to pool (BAA072F6...) <- THIS ONE for explorer
+    // Block 2: Pool sends output token to user (EF0F9683...)
     let blockHash = null;
-    if (builder.blocks && builder.blocks.length > 0) {
-      // Use the LAST block which should be the swap
-      const block = builder.blocks[builder.blocks.length - 1];
-      console.log(`📦 Last block (index ${builder.blocks.length - 1}):`, block);
+    if (builder.blocks && builder.blocks.length > 1) {
+      // Use index 1 (second block) - the user sends to pool
+      const block = builder.blocks[1];
+      console.log('📦 Block at index 1 (user->pool):', block);
       console.log('📦 Total blocks:', builder.blocks.length);
 
       if (block && block.hash) {
