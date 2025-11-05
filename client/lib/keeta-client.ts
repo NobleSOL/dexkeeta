@@ -352,3 +352,113 @@ export async function fetchLiquidityPositions(seed: string, accountIndex: number
     return [];
   }
 }
+
+/**
+ * Calculate swap output amount using constant product formula (x * y = k)
+ * Includes 0.3% swap fee
+ */
+function calculateSwapOutput(
+  amountIn: bigint,
+  reserveIn: bigint,
+  reserveOut: bigint
+): { amountOut: bigint; priceImpact: number } {
+  if (reserveIn === 0n || reserveOut === 0n) {
+    return { amountOut: 0n, priceImpact: 0 };
+  }
+
+  // Apply 0.3% fee (multiply by 997, divide by 1000)
+  const amountInWithFee = amountIn * 997n;
+  const numerator = amountInWithFee * reserveOut;
+  const denominator = (reserveIn * 1000n) + amountInWithFee;
+  const amountOut = numerator / denominator;
+
+  // Calculate price impact
+  const exactQuote = (amountIn * reserveOut) / reserveIn;
+  const priceImpact = exactQuote > 0n 
+    ? Number((exactQuote - amountOut) * 10000n / exactQuote) / 100
+    : 0;
+
+  return { amountOut, priceImpact };
+}
+
+/**
+ * Get swap quote for a token pair
+ */
+export async function getSwapQuote(
+  tokenIn: string,
+  tokenOut: string,
+  amountIn: string,
+  poolAddress: string
+): Promise<{
+  amountOut: string;
+  amountOutHuman: number;
+  priceImpact: number;
+  minimumReceived: string;
+} | null> {
+  try {
+    // Fetch pool reserves
+    const pools = await fetchPools();
+    const pool = pools.find(p => p.poolAddress === poolAddress);
+    
+    if (!pool) {
+      console.error('Pool not found:', poolAddress);
+      return null;
+    }
+
+    // Determine which token is A and which is B
+    const isAtoB = tokenIn === pool.tokenA;
+    const reserveIn = isAtoB ? BigInt(pool.reserveA) : BigInt(pool.reserveB);
+    const reserveOut = isAtoB ? BigInt(pool.reserveB) : BigInt(pool.reserveA);
+    const decimalsOut = isAtoB ? pool.decimalsB : pool.decimalsA;
+
+    // Convert amountIn to atomic units
+    const amountInAtomic = BigInt(Math.floor(parseFloat(amountIn) * 1e9));
+
+    // Calculate output
+    const { amountOut, priceImpact } = calculateSwapOutput(
+      amountInAtomic,
+      reserveIn,
+      reserveOut
+    );
+
+    // Apply 0.5% slippage tolerance
+    const minimumReceived = (amountOut * 995n) / 1000n;
+
+    return {
+      amountOut: amountOut.toString(),
+      amountOutHuman: Number(amountOut) / (10 ** decimalsOut),
+      priceImpact,
+      minimumReceived: minimumReceived.toString(),
+    };
+  } catch (error) {
+    console.error('Error calculating swap quote:', error);
+    return null;
+  }
+}
+
+/**
+ * Execute a swap transaction
+ * NOTE: This requires backend implementation for transaction signing
+ * For now, this is a placeholder that will need to be implemented
+ */
+export async function executeSwap(
+  seed: string,
+  tokenIn: string,
+  tokenOut: string,
+  amountIn: string,
+  minAmountOut: string,
+  poolAddress: string,
+  accountIndex: number = 0
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  try {
+    // This requires implementing transaction building and signing
+    // which is complex and should be done server-side for security
+    throw new Error('Client-side swap execution not yet implemented. This requires backend transaction signing.');
+  } catch (error: any) {
+    console.error('Swap execution error:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}

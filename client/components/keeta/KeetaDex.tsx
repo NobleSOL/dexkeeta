@@ -21,7 +21,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { KeetaPoolCard, KeetaPoolCardData } from "@/components/keeta/KeetaPoolCard";
-import { generateWallet as generateWalletClient, getAddressFromSeed, fetchBalances, fetchLiquidityPositions, fetchPools } from "@/lib/keeta-client";
+import { generateWallet as generateWalletClient, getAddressFromSeed, fetchBalances, fetchLiquidityPositions, fetchPools, getSwapQuote as getSwapQuoteClient } from "@/lib/keeta-client";
 
 // API base URL - uses same origin as frontend (Vite dev server on 8080)
 const API_BASE = `${window.location.origin}/api`;
@@ -313,19 +313,20 @@ export default function KeetaDex() {
       // Determine tokenOut (the opposite token in the pool)
       const tokenOut = pool.tokenA === swapTokenIn ? pool.tokenB : pool.tokenA;
 
-      const res = await fetch(`${API_BASE}/swap/quote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tokenIn: swapTokenIn,
-          tokenOut: tokenOut,
-          amountIn: swapAmount,
-        }),
-      });
-      const data = await res.json();
-      // API returns { success: true, quote: {...} }
-      if (data.success && data.quote) {
-        setSwapQuote(data.quote);
+      // Use client-side swap quote calculation
+      const quote = await getSwapQuoteClient(
+        swapTokenIn,
+        tokenOut,
+        swapAmount,
+        selectedPoolForSwap
+      );
+
+      if (quote) {
+        setSwapQuote({
+          amountOut: quote.amountOutHuman.toString(),
+          priceImpact: quote.priceImpact,
+          minimumReceived: (Number(quote.minimumReceived) / 1e9).toString(),
+        });
       } else {
         setSwapQuote(null);
       }
