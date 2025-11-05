@@ -351,7 +351,7 @@ export default function KeetaDex() {
   }, [swapAmount, selectedPoolForSwap, swapTokenIn]);
 
   async function executeSwap() {
-    if (!wallet || !selectedPoolForSwap || !swapTokenIn || !swapAmount) return;
+    if (!wallet || !selectedPoolForSwap || !swapTokenIn || !swapAmount || !swapQuote) return;
 
     setSwapping(true);
     try {
@@ -362,35 +362,33 @@ export default function KeetaDex() {
 
       // Determine tokenOut (the opposite token in the pool)
       const tokenOut = pool.tokenA === swapTokenIn ? pool.tokenB : pool.tokenA;
+      const tokenInSymbol = pool.tokenA === swapTokenIn ? pool.symbolA : pool.symbolB;
+      const tokenOutSymbol = pool.tokenA === swapTokenIn ? pool.symbolB : pool.symbolA;
 
-      const res = await fetch(`${API_BASE}/swap/execute`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userAddress: wallet.address,
-          userSeed: wallet.seed,
-          tokenIn: swapTokenIn,
-          tokenOut: tokenOut,
-          amountIn: swapAmount,
-        }),
-      });
-      const data = await res.json();
+      console.log('🔄 Executing swap with client-side transaction signing...');
 
-      if (data.success && data.result) {
-        // Get token symbols for better display
-        const tokenInSymbol = pool.tokenA === swapTokenIn ? pool.symbolA : pool.symbolB;
-        const tokenOutSymbol = pool.tokenA === swapTokenIn ? pool.symbolB : pool.symbolA;
+      // Execute swap using client-side implementation
+      const result = await executeSwapClient(
+        wallet.seed,
+        swapTokenIn,
+        tokenOut,
+        swapAmount,
+        swapQuote.minimumReceived,
+        selectedPoolForSwap,
+        wallet.accountIndex || 0
+      );
 
-        // Build explorer link - use block hash if available, otherwise fallback to address
-        const explorerUrl = data.result.blockHash
-          ? `https://explorer.test.keeta.com/block/${data.result.blockHash}`
-          : `https://explorer.test.keeta.com/address/${wallet.address}`;
+      if (result.success) {
+        // Build explorer link
+        const explorerUrl = result.txHash
+          ? `https://explorer.test.keeta.com/tx/${result.txHash}`
+          : `https://explorer.test.keeta.com/account/${wallet.address}`;
 
         toast({
           title: "Swap Successful!",
           description: (
             <div className="space-y-1">
-              <div>Swapped {swapAmount} {tokenInSymbol}</div>
+              <div>Swapped {swapAmount} {tokenInSymbol} for {swapQuote.amountOutHuman} {tokenOutSymbol}</div>
               <a
                 href={explorerUrl}
                 target="_blank"
@@ -405,26 +403,18 @@ export default function KeetaDex() {
             </div>
           ),
         });
+
+        // Clear form
         setSwapAmount("");
         setSwapQuote(null);
+
         // Refresh wallet balances
-        const walletRes = await fetch(`${API_BASE}/wallet`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "import", seed: wallet.seed }),
-        });
-        const walletData = await walletRes.json();
-        if (walletData.success) {
-          const updatedWallet = {
-            address: walletData.address,
-            seed: wallet.seed,
-            tokens: walletData.tokens || [],
-          };
-          setWallet(updatedWallet);
-          localStorage.setItem("keetaWallet", JSON.stringify(updatedWallet));
-        }
+        await fetchUserBalances();
+
+        // Refresh pools to update reserves
+        await loadPools();
       } else {
-        throw new Error(data.error || "Swap failed");
+        throw new Error(result.error || "Swap failed");
       }
     } catch (error: any) {
       toast({
