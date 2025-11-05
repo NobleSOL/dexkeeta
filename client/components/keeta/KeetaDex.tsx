@@ -458,23 +458,8 @@ export default function KeetaDex() {
   }
 
   async function createPool() {
-    if (!wallet || !newPoolTokenA || !newPoolTokenB || !liqAmountA || !liqAmountB) return;
-
-    if (newPoolTokenA === newPoolTokenB) {
-      toast({
-        title: "Invalid Pool",
-        description: "Cannot create pool with same token",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Pool creation requires backend infrastructure (not available on Vercel)
-    toast({
-      title: "Pool Creation Unavailable",
-      description: "Pool creation requires backend infrastructure. Please use existing pools or contact support to create new pools.",
-      variant: "destructive",
-    });
+    // Pool creation requires backend infrastructure - silently disabled for client-only deployment
+    return;
   }
 
   async function addLiquidity() {
