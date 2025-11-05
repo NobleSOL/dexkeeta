@@ -534,9 +534,24 @@ export async function executeSwap(
     const result = await client.publishBuilder(builder);
     console.log('✅ Transaction published:', result);
 
+    // Extract block hash from the builder
+    let blockHash = null;
+    if (builder.blocks && builder.blocks.length > 0) {
+      // Try to get hash from the last block
+      const block = builder.blocks[builder.blocks.length - 1];
+      if (block && block.hash) {
+        // Convert BlockHash to hex string
+        blockHash = typeof block.hash === 'string'
+          ? block.hash
+          : block.hash.toString('hex').toUpperCase();
+      }
+    }
+
+    console.log('✅ Block hash:', blockHash);
+
     return {
       success: true,
-      txHash: result?.toString() || 'unknown',
+      txHash: blockHash || 'unknown',
     };
   } catch (error: any) {
     console.error('❌ Swap execution error:', error);
