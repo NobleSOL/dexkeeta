@@ -1,11 +1,15 @@
 import { defineConfig } from "vite";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Server build configuration
 export default defineConfig({
   build: {
     lib: {
-      entry: "./server/node-build.ts",
+      entry: path.join(__dirname, "server", "node-build.ts"),
       name: "server",
       fileName: "node-build",
       formats: ["es"],
