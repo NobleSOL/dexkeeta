@@ -21,7 +21,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { KeetaPoolCard, KeetaPoolCardData } from "@/components/keeta/KeetaPoolCard";
-import { generateWallet as generateWalletClient, getAddressFromSeed, fetchBalances, fetchLiquidityPositions } from "@/lib/keeta-client";
+import { generateWallet as generateWalletClient, getAddressFromSeed, fetchBalances, fetchLiquidityPositions, fetchPools } from "@/lib/keeta-client";
 
 // API base URL - uses same origin as frontend (Vite dev server on 8080)
 const API_BASE = `${window.location.origin}/api`;
@@ -145,7 +145,7 @@ export default function KeetaDex() {
   // Fetch pools and positions when wallet is loaded
   useEffect(() => {
     if (wallet?.address) {
-      fetchPools().catch(err => console.error('Error fetching pools:', err));
+      loadPools().catch(err => console.error('Error fetching pools:', err));
       fetchPositions().catch(err => console.error('Error fetching positions:', err));
     }
   }, [wallet?.address]);
@@ -273,20 +273,17 @@ export default function KeetaDex() {
     });
   }
 
-  async function fetchPools() {
+  async function loadPools() {
     try {
-      const res = await fetch(`${API_BASE}/pools`, {
-        cache: 'no-store'
-      });
-      const data = await res.json();
-      console.log('🔍 Fetched pools data:', data.pools);
-      if (data.pools && data.pools.length > 0) {
+      const poolsData = await fetchPools();
+      console.log('🔍 Fetched pools data:', poolsData);
+      if (poolsData && poolsData.length > 0) {
         console.log('🔍 First pool reserves:', {
-          reserveAHuman: data.pools[0].reserveAHuman,
-          reserveBHuman: data.pools[0].reserveBHuman
+          reserveAHuman: poolsData[0].reserveAHuman,
+          reserveBHuman: poolsData[0].reserveBHuman
         });
       }
-      setPools(data.pools || []);
+      setPools(poolsData || []);
     } catch (error) {
       console.error("Failed to fetch pools:", error);
     }
@@ -484,7 +481,7 @@ export default function KeetaDex() {
           description: `Successfully created ${createData.pool.symbolA}/${createData.pool.symbolB} pool and added initial liquidity`,
         });
         // Refresh data
-        await fetchPools();
+        await loadPools();
         await fetchPositions();
         // Reset form
         setCreateMode(false);
@@ -499,7 +496,7 @@ export default function KeetaDex() {
           description: `Pool created successfully but failed to add liquidity: ${liqData.error}`,
           variant: "destructive",
         });
-        await fetchPools();
+        await loadPools();
       }
     } catch (error: any) {
       toast({

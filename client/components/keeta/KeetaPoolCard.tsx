@@ -33,6 +33,15 @@ export function KeetaPoolCard({
   const reserveAHuman = pool.reserveAHuman ?? 0;
   const reserveBHuman = pool.reserveBHuman ?? 0;
 
+  // Debug logging
+  console.log('🔍 KeetaPoolCard rendering:', {
+    poolAddress: pool.poolAddress.slice(-8),
+    reserveAHuman,
+    reserveBHuman,
+    symbolA: pool.symbolA,
+    symbolB: pool.symbolB
+  });
+
   // Calculate TVL display
   const tvl = `${reserveAHuman.toFixed(2)} ${pool.symbolA} + ${reserveBHuman.toFixed(2)} ${pool.symbolB}`;
 
