@@ -10,11 +10,12 @@ export default defineConfig(async ({ mode }) => {
   // In production, the server is run separately via node-build.ts
   if (mode === 'development' && process.env.NODE_ENV !== 'production') {
     // Dynamically import the plugin only in dev mode
+    // Using eval to prevent static analysis from trying to resolve the path
     const expressPlugin: Plugin = {
       name: "express-plugin",
       apply: "serve",
       async configureServer(server) {
-        const { createServer } = await import("./server/index.js");
+        const { createServer } = await eval('import("./server/index.js")');
         const app = createServer();
         server.middlewares.use(app);
       },
