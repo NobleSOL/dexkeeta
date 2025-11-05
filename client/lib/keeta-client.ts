@@ -582,3 +582,168 @@ export async function executeSwap(
     };
   }
 }
+
+/**
+ * Add liquidity to a pool
+ */
+export async function addLiquidity(
+  seed: string,
+  poolAddress: string,
+  tokenA: string,
+  tokenB: string,
+  amountADesired: string,
+  amountBDesired: string,
+  accountIndex: number = 0
+): Promise<{ success: boolean; amountA?: string; amountB?: string; blockHash?: string; error?: string }> {
+  try {
+    console.log('💧 Adding liquidity...');
+    console.log('  poolAddress:', poolAddress);
+    console.log('  amountADesired:', amountADesired);
+    console.log('  amountBDesired:', amountBDesired);
+
+    // Create client from seed
+    const client = createKeetaClientFromSeed(seed, accountIndex);
+
+    // Convert amounts to atomic units
+    const amountA = BigInt(Math.floor(parseFloat(amountADesired) * 1e9));
+    const amountB = BigInt(Math.floor(parseFloat(amountBDesired) * 1e9));
+
+    console.log('  amountA (atomic):', amountA.toString());
+    console.log('  amountB (atomic):', amountB.toString());
+
+    // Build transaction
+    const builder = client.initBuilder();
+
+    const poolAccount = KeetaSDK.lib.Account.fromPublicKeyString(poolAddress);
+    const tokenAAccount = KeetaSDK.lib.Account.fromPublicKeyString(tokenA);
+    const tokenBAccount = KeetaSDK.lib.Account.fromPublicKeyString(tokenB);
+
+    // User sends both tokens to the pool
+    builder.send(poolAccount, amountA, tokenAAccount);
+    builder.send(poolAccount, amountB, tokenBAccount);
+
+    // Publish transaction
+    console.log('📤 Publishing add liquidity transaction...');
+    const result = await client.publishBuilder(builder);
+    console.log('✅ Transaction published:', result);
+
+    // Extract block hash (use second block - index 1)
+    let blockHash = null;
+    if (builder.blocks && builder.blocks.length > 1) {
+      const block = builder.blocks[1];
+      if (block && block.hash) {
+        blockHash = typeof block.hash === 'string'
+          ? block.hash.toUpperCase()
+          : block.hash.toString('hex').toUpperCase();
+      }
+    }
+
+    return {
+      success: true,
+      amountA: amountADesired,
+      amountB: amountBDesired,
+      blockHash: blockHash || undefined,
+    };
+  } catch (error: any) {
+    console.error('❌ Add liquidity error:', error);
+    return {
+      success: false,
+      error: error.message || 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Remove liquidity from a pool
+ * Note: This requires SEND_ON_BEHALF permission which the pool must have granted
+ */
+export async function removeLiquidity(
+  seed: string,
+  poolAddress: string,
+  tokenA: string,
+  tokenB: string,
+  liquidityPercent: number,
+  userShares: string,
+  accountIndex: number = 0
+): Promise<{ success: boolean; amountA?: string; amountB?: string; blockHash?: string; error?: string }> {
+  try {
+    console.log('🔥 Removing liquidity...');
+    console.log('  poolAddress:', poolAddress);
+    console.log('  liquidityPercent:', liquidityPercent);
+    console.log('  userShares:', userShares);
+
+    // Calculate liquidity amount to remove
+    const sharesToBurn = (BigInt(userShares) * BigInt(liquidityPercent)) / 100n;
+    console.log('  sharesToBurn:', sharesToBurn.toString());
+
+    // Create client from seed
+    const client = createKeetaClientFromSeed(seed, accountIndex);
+    const seedBytes = hexToBytes(seed);
+    const account = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
+    const userAddress = account.publicKeyString.get();
+
+    // Fetch pool reserves to calculate amounts
+    const pools = await fetchPools();
+    const pool = pools.find(p => p.poolAddress === poolAddress);
+
+    if (!pool) {
+      throw new Error('Pool not found');
+    }
+
+    const reserveA = BigInt(pool.reserveA);
+    const reserveB = BigInt(pool.reserveB);
+    const totalShares = BigInt(pool.totalShares || '1000000000000');
+
+    // Calculate amounts to receive (proportional to shares being burned)
+    const amountA = (sharesToBurn * reserveA) / totalShares;
+    const amountB = (sharesToBurn * reserveB) / totalShares;
+
+    console.log('  Calculated amountA:', amountA.toString());
+    console.log('  Calculated amountB:', amountB.toString());
+
+    // Build transaction
+    const builder = client.initBuilder();
+
+    const poolAccount = KeetaSDK.lib.Account.fromPublicKeyString(poolAddress);
+    const tokenAAccount = KeetaSDK.lib.Account.fromPublicKeyString(tokenA);
+    const tokenBAccount = KeetaSDK.lib.Account.fromPublicKeyString(tokenB);
+    const userAccount = KeetaSDK.lib.Account.fromPublicKeyString(userAddress);
+
+    // Pool sends tokens back to user (requires SEND_ON_BEHALF)
+    builder.send(userAccount, amountA, tokenAAccount, undefined, {
+      account: poolAccount,
+    });
+    builder.send(userAccount, amountB, tokenBAccount, undefined, {
+      account: poolAccount,
+    });
+
+    // Publish transaction
+    console.log('📤 Publishing remove liquidity transaction...');
+    const result = await client.publishBuilder(builder);
+    console.log('✅ Transaction published:', result);
+
+    // Extract block hash (use second block - index 1)
+    let blockHash = null;
+    if (builder.blocks && builder.blocks.length > 1) {
+      const block = builder.blocks[1];
+      if (block && block.hash) {
+        blockHash = typeof block.hash === 'string'
+          ? block.hash.toUpperCase()
+          : block.hash.toString('hex').toUpperCase();
+      }
+    }
+
+    return {
+      success: true,
+      amountA: (Number(amountA) / 1e9).toFixed(6),
+      amountB: (Number(amountB) / 1e9).toFixed(6),
+      blockHash: blockHash || undefined,
+    };
+  } catch (error: any) {
+    console.error('❌ Remove liquidity error:', error);
+    return {
+      success: false,
+      error: error.message || 'Unknown error',
+    };
+  }
+}

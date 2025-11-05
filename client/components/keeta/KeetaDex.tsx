@@ -21,7 +21,17 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { KeetaPoolCard, KeetaPoolCardData } from "@/components/keeta/KeetaPoolCard";
-import { generateWallet as generateWalletClient, getAddressFromSeed, fetchBalances, fetchLiquidityPositions, fetchPools, getSwapQuote as getSwapQuoteClient, executeSwap as executeSwapClient } from "@/lib/keeta-client";
+import {
+  generateWallet as generateWalletClient,
+  getAddressFromSeed,
+  fetchBalances,
+  fetchLiquidityPositions,
+  fetchPools,
+  getSwapQuote as getSwapQuoteClient,
+  executeSwap as executeSwapClient,
+  addLiquidity as addLiquidityClient,
+  removeLiquidity as removeLiquidityClient
+} from "@/lib/keeta-client";
 
 // API base URL - uses same origin as frontend (Vite dev server on 8080)
 const API_BASE = `${window.location.origin}/api`;
@@ -533,29 +543,55 @@ export default function KeetaDex() {
       const pool = pools.find((p) => p.poolAddress === selectedPoolForLiq);
       if (!pool) return;
 
-      const res = await fetch(`${API_BASE}/liquidity/add`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userSeed: wallet.seed,
-          tokenA: pool.tokenA,
-          tokenB: pool.tokenB,
-          amountADesired: liqAmountA,
-          amountBDesired: liqAmountB,
-        }),
-      });
-      const data = await res.json();
+      console.log('💧 Adding liquidity with client-side transaction signing...');
 
-      if (data.success) {
+      // Execute add liquidity using client-side implementation
+      const result = await addLiquidityClient(
+        wallet.seed,
+        selectedPoolForLiq,
+        pool.tokenA,
+        pool.tokenB,
+        liqAmountA,
+        liqAmountB,
+        wallet.accountIndex || 0
+      );
+
+      if (result.success) {
+        // Build explorer link
+        const explorerUrl = result.blockHash
+          ? `https://explorer.test.keeta.com/block/${result.blockHash}`
+          : `https://explorer.test.keeta.com/account/${wallet.address}`;
+
         toast({
           title: "Liquidity Added!",
-          description: `Added ${data.amountA} ${pool.symbolA} and ${data.amountB} ${pool.symbolB}`,
+          description: (
+            <div className="space-y-1">
+              <div>Added {result.amountA} {pool.symbolA} and {result.amountB} {pool.symbolB}</div>
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sky-400 hover:text-sky-300 underline text-sm flex items-center gap-1"
+              >
+                View on Keeta Explorer
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </div>
+          ),
         });
+
+        // Clear form
         setLiqAmountA("");
         setLiqAmountB("");
-        fetchPositions();
+
+        // Refresh data
+        await refreshBalances();
+        await loadPools();
+        await fetchPositions();
       } else {
-        throw new Error(data.error || "Failed to add liquidity");
+        throw new Error(result.error || "Failed to add liquidity");
       }
     } catch (error: any) {
       toast({
@@ -573,29 +609,54 @@ export default function KeetaDex() {
 
     setRemovingLiq(true);
     try {
-      // Calculate liquidity amount to remove based on percentage
-      const liquidityAmount = (BigInt(position.liquidity) * BigInt(removeLiqPercent) / 100n).toString();
+      console.log('🔥 Removing liquidity with client-side transaction signing...');
 
-      const res = await fetch(`${API_BASE}/liquidity/remove`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userSeed: wallet.seed,
-          tokenA: position.tokenA,
-          tokenB: position.tokenB,
-          liquidity: liquidityAmount,
-        }),
-      });
-      const data = await res.json();
+      // Execute remove liquidity using client-side implementation
+      const result = await removeLiquidityClient(
+        wallet.seed,
+        position.poolAddress,
+        position.tokenA,
+        position.tokenB,
+        removeLiqPercent,
+        position.liquidity,
+        wallet.accountIndex || 0
+      );
 
-      if (data.success) {
+      if (result.success) {
+        // Build explorer link
+        const explorerUrl = result.blockHash
+          ? `https://explorer.test.keeta.com/block/${result.blockHash}`
+          : `https://explorer.test.keeta.com/account/${wallet.address}`;
+
         toast({
           title: "Liquidity Removed!",
-          description: `Removed ${removeLiqPercent}% of your liquidity`,
+          description: (
+            <div className="space-y-1">
+              <div>Removed {removeLiqPercent}% of your liquidity</div>
+              <div className="text-sm text-muted-foreground">
+                Received {result.amountA} {position.symbolA} and {result.amountB} {position.symbolB}
+              </div>
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sky-400 hover:text-sky-300 underline text-sm flex items-center gap-1"
+              >
+                View on Keeta Explorer
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </div>
+          ),
         });
-        fetchPositions();
+
+        // Refresh data
+        await refreshBalances();
+        await loadPools();
+        await fetchPositions();
       } else {
-        throw new Error(data.error || "Failed to remove liquidity");
+        throw new Error(result.error || "Failed to remove liquidity");
       }
     } catch (error: any) {
       toast({
