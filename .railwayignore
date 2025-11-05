@@ -1,0 +1,37 @@
+# Railway ignore file - explicitly list what to exclude
+# Everything else (including server/) will be included
+
+# Node
+node_modules/
+.npm/
+.pnpm-store/
+
+# Build artifacts (except dist/spa which we need)
+dist/server/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Testing
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
