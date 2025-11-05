@@ -143,15 +143,54 @@ export async function fetchTokenMetadata(tokenAddress: string) {
 }
 
 /**
- * Fetch available pools
+ * Fetch available pools (from API first, then enrich with on-chain data)
  */
 export async function fetchPools() {
   try {
+    // Fetch pool list from API
     const response = await fetch(`${window.location.origin}/api/pools`);
     if (!response.ok) throw new Error('Failed to fetch pools');
 
     const data = await response.json();
-    return data.pools || [];
+    const poolList = data.pools || [];
+
+    // Enrich each pool with on-chain reserve data
+    const client = createKeetaClient();
+    const enrichedPools = await Promise.all(
+      poolList.map(async (pool: any) => {
+        try {
+          // Fetch reserves from pool account
+          const balances = await client.getAllBalances({ account: pool.poolAddress });
+
+          const reserveA = balances.find((b: any) => b.token === pool.tokenA)?.balance || '0';
+          const reserveB = balances.find((b: any) => b.token === pool.tokenB)?.balance || '0';
+
+          // Fetch metadata for formatting
+          const metadataA = await fetchTokenMetadata(pool.tokenA);
+          const metadataB = await fetchTokenMetadata(pool.tokenB);
+
+          const reserveAHuman = Number(reserveA) / (10 ** metadataA.decimals);
+          const reserveBHuman = Number(reserveB) / (10 ** metadataB.decimals);
+
+          const price = reserveAHuman > 0 ? (reserveBHuman / reserveAHuman).toFixed(6) : '0';
+
+          return {
+            ...pool,
+            reserveA: reserveA.toString(),
+            reserveB: reserveB.toString(),
+            reserveAHuman,
+            reserveBHuman,
+            price,
+            totalShares: '0', // Not tracked yet
+          };
+        } catch (err) {
+          console.error('Error enriching pool:', err);
+          return pool;
+        }
+      })
+    );
+
+    return enrichedPools;
   } catch (error) {
     console.error('Error fetching pools:', error);
     return [];
