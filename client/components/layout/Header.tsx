@@ -91,7 +91,8 @@ export function Header() {
           <div className="relative" ref={menuRef}>
             <Button
               variant="secondary"
-              className="hidden sm:inline-flex gap-2"
+              className="gap-1 sm:gap-2 px-2 sm:px-4"
+              size="sm"
               onClick={() => setOpen((o) => !o)}
               aria-haspopup="menu"
               aria-expanded={open}
@@ -102,8 +103,8 @@ export function Header() {
                   network === "Base" ? "bg-sky-400" : "bg-[#FF6F5E]",
                 )}
               />
-              <span className="font-semibold">{network}</span>
-              <ChevronDown className="opacity-70" />
+              <span className="font-semibold text-xs sm:text-sm">{network}</span>
+              <ChevronDown className="opacity-70 h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
             {open && (
               <div
