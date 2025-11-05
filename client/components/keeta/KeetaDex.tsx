@@ -396,18 +396,24 @@ export default function KeetaDex() {
       const tokenInSymbol = pool.tokenA === swapTokenIn ? pool.symbolA : pool.symbolB;
       const tokenOutSymbol = pool.tokenA === swapTokenIn ? pool.symbolB : pool.symbolA;
 
-      console.log('🔄 Executing swap with client-side transaction signing...');
+      console.log('🔄 Executing swap via backend API (requires ops SEND_ON_BEHALF permission)...');
 
-      // Execute swap using client-side implementation
-      const result = await executeSwapClient(
-        wallet.seed,
-        swapTokenIn,
-        tokenOut,
-        swapAmount,
-        swapQuote.minimumReceived,
-        selectedPoolForSwap,
-        wallet.accountIndex || 0
-      );
+      // Execute swap via backend API (ops account has SEND_ON_BEHALF permission on pool)
+      const swapResponse = await fetch(`${API_BASE}/swap/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userAddress: wallet.address,
+          userSeed: wallet.seed,
+          tokenIn: swapTokenIn,
+          tokenOut: tokenOut,
+          amountIn: swapAmount,
+          minAmountOut: swapQuote.minimumReceived,
+          slippagePercent: 0.5,
+        }),
+      });
+
+      const result = await swapResponse.json();
 
       if (result.success) {
         // Build explorer link using block hash
@@ -438,6 +444,9 @@ export default function KeetaDex() {
         // Clear form
         setSwapAmount("");
         setSwapQuote(null);
+
+        // Wait for blockchain to sync before refreshing
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Refresh wallet balances
         await refreshBalances();
