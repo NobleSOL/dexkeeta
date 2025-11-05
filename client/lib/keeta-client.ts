@@ -1,10 +1,17 @@
 // Client-side Keeta blockchain utilities
 // Fetches data directly from Keeta network without backend
 
-import { UserClient, lib } from '@keetanetwork/keetanet-client';
+import { UserClient, lib, Ledger } from '@keetanetwork/keetanet-client';
 
 const KEETA_NODE = 'https://api.test.keeta.com';
 const KEETA_NETWORK = 'test';
+
+/**
+ * Create a Ledger client for read-only operations (no signing)
+ */
+export function createKeetaLedger() {
+  return new Ledger({ network: KEETA_NETWORK, nodeUrl: KEETA_NODE });
+}
 
 /**
  * Create a UserClient for read-only operations (no signing)
@@ -65,9 +72,9 @@ export function generateWallet(): { seed: string; address: string } {
 export async function fetchBalances(address: string) {
   try {
     console.log('🔍 fetchBalances called for:', address);
-    const client = createKeetaClient();
-    console.log('✅ Client created');
-    const balances = await client.getAllBalances({ account: address });
+    const ledger = createKeetaLedger();
+    console.log('✅ Ledger created');
+    const balances = await ledger.getAllBalances(address);
     console.log('✅ Raw balances from blockchain:', balances);
 
     // Format balances with metadata
@@ -171,12 +178,12 @@ export async function fetchPools() {
     const poolList = data.pools || [];
 
     // Enrich each pool with on-chain reserve data
-    const client = createKeetaClient();
+    const ledger = createKeetaLedger();
     const enrichedPools = await Promise.all(
       poolList.map(async (pool: any) => {
         try {
           // Fetch reserves from pool account
-          const balances = await client.getAllBalances({ account: pool.poolAddress });
+          const balances = await ledger.getAllBalances(pool.poolAddress);
 
           const reserveA = balances.find((b: any) => b.token === pool.tokenA)?.balance || '0';
           const reserveB = balances.find((b: any) => b.token === pool.tokenB)?.balance || '0';
