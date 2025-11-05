@@ -1,7 +1,7 @@
 // Client-side Keeta blockchain utilities
 // Fetches data directly from Keeta network without backend
 
-import { UserClient, lib, Ledger } from '@keetanetwork/keetanet-client';
+import * as KeetaSDK from '@keetanetwork/keetanet-client';
 
 const KEETA_NODE = 'https://api.test.keeta.com';
 const KEETA_NETWORK = 'test';
@@ -10,14 +10,14 @@ const KEETA_NETWORK = 'test';
  * Create a Ledger client for read-only operations (no signing)
  */
 export function createKeetaLedger() {
-  return new Ledger({ network: KEETA_NETWORK, nodeUrl: KEETA_NODE });
+  return new KeetaSDK.Ledger({ network: KEETA_NETWORK, nodeUrl: KEETA_NODE });
 }
 
 /**
  * Create a UserClient for read-only operations (no signing)
  */
 export function createKeetaClient() {
-  return UserClient.fromNetwork(KEETA_NETWORK as any, null);
+  return KeetaSDK.UserClient.fromNetwork(KEETA_NETWORK as any, null);
 }
 
 /**
@@ -36,8 +36,8 @@ function hexToBytes(hex: string): Uint8Array {
  */
 export function createKeetaClientFromSeed(seed: string, accountIndex: number = 0) {
   const seedBytes = hexToBytes(seed);
-  const account = lib.Account.fromSeed(seedBytes, accountIndex);
-  return UserClient.fromNetwork(KEETA_NETWORK as any, account);
+  const account = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
+  return KeetaSDK.UserClient.fromNetwork(KEETA_NETWORK as any, account);
 }
 
 /**
@@ -45,7 +45,7 @@ export function createKeetaClientFromSeed(seed: string, accountIndex: number = 0
  */
 export function getAddressFromSeed(seed: string, accountIndex: number = 0): string {
   const seedBytes = hexToBytes(seed);
-  const account = lib.Account.fromSeed(seedBytes, accountIndex);
+  const account = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
   return account.publicKeyString.get();
 }
 
