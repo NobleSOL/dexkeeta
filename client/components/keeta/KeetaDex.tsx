@@ -1115,27 +1115,9 @@ export default function KeetaDex() {
                 <CardDescription>Provide liquidity to Keeta pools and earn trading fees</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Mode Toggle */}
-                <div className="flex gap-2">
-                  <Button
-                    variant={!createMode ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCreateMode(false)}
-                    className="flex-1"
-                  >
-                    Select Pool
-                  </Button>
-                  <Button
-                    variant={createMode ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCreateMode(true)}
-                    className="flex-1"
-                  >
-                    Create Pool
-                  </Button>
-                </div>
+                {/* Mode Toggle - Create Pool disabled for client-only deployment */}
 
-                {!createMode ? (
+                {true ? (
                   // Select Existing Pool Mode
                   <div className="rounded-lg bg-secondary/40 p-3">
                     <label className="text-xs text-muted-foreground mb-2 block">Select Pool</label>
@@ -1152,8 +1134,10 @@ export default function KeetaDex() {
                       ))}
                     </select>
                   </div>
-                ) : (
-                  // Create New Pool Mode
+                ) : null}
+
+                {false && (
+                  // Create New Pool Mode - disabled for client-only deployment
                   <div className="space-y-3">
                     {/* Token A Input - Matching swap design */}
                     <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">
