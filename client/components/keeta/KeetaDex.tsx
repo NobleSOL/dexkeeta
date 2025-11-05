@@ -262,6 +262,26 @@ export default function KeetaDex() {
     setSeedInput("");
   }
 
+  async function refreshBalances() {
+    if (!wallet) return;
+
+    try {
+      console.log('🔄 Refreshing balances...');
+      const tokens = await fetchBalances(wallet.seed, wallet.accountIndex || 0);
+
+      const updatedWallet = {
+        ...wallet,
+        tokens,
+      };
+
+      setWallet(updatedWallet);
+      localStorage.setItem("keetaWallet", JSON.stringify(updatedWallet));
+      console.log('✅ Balances refreshed');
+    } catch (error) {
+      console.error('❌ Failed to refresh balances:', error);
+    }
+  }
+
   function disconnectWallet() {
     setWallet(null);
     localStorage.removeItem("keetaWallet");
@@ -409,7 +429,7 @@ export default function KeetaDex() {
         setSwapQuote(null);
 
         // Refresh wallet balances
-        await fetchUserBalances();
+        await refreshBalances();
 
         // Refresh pools to update reserves
         await loadPools();
