@@ -506,8 +506,8 @@ export async function executeSwap(
     const poolAccount = KeetaSDK.lib.Account.fromPublicKeyString(poolAddress);
     const userAccount = KeetaSDK.lib.Account.fromPublicKeyString(userAddress);
 
-    // Treasury address (hardcoded for now)
-    const TREASURY_ADDRESS = 'keeta_aabixohj32z6kk3ew7e7b6zfmvfztyqmtvbxhmjk27oqovchf4qffbpnipgqxsi';
+    // Treasury address
+    const TREASURY_ADDRESS = 'keeta_aabtozgfunwwvwdztv54y6l5x57q2g3254shgp27zjltr2xz3pyo7q4tjtmsamy';
     const treasuryAccount = KeetaSDK.lib.Account.fromPublicKeyString(TREASURY_ADDRESS);
 
     // 1. User sends fee to treasury
