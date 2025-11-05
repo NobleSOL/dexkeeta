@@ -98,53 +98,47 @@ export function generateWallet(): { seed: string; address: string } {
 export async function fetchBalances(seed: string, accountIndex: number = 0) {
   try {
     console.log('🔍 fetchBalances called');
-    const client = createKeetaClientFromSeed(seed, accountIndex);
-    console.log('✅ Client created with account');
-    const balances = await client.allBalances();
-    console.log('✅ Raw balances from blockchain:', balances);
-    console.log('📊 Balance structure:', balances.length > 0 ? Object.keys(balances[0]) : 'empty');
 
-    // Handle case where balances might be in a different format
-    let balanceArray = balances;
-    if (!Array.isArray(balances)) {
-      console.log('⚠️ Balances is not an array, checking for data property...');
-      if (balances.balances && Array.isArray(balances.balances)) {
-        balanceArray = balances.balances;
-      } else {
-        console.error('❌ Cannot extract balance array from response');
-        return [];
-      }
-    }
+    // Create account from seed
+    const seedBytes = hexToBytes(seed);
+    const account = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
+    const address = account.publicKeyString.get();
+    console.log('✅ Account created:', address);
+
+    // Create client
+    const client = KeetaSDK.UserClient.fromNetwork(KEETA_NETWORK as any, account);
+    console.log('✅ Client created');
+
+    // Fetch balances - pass account object as parameter
+    const rawBalances = await client.allBalances({ account });
+    console.log('✅ Raw balances from blockchain:', rawBalances);
 
     // Format balances with metadata
     const formattedBalances = await Promise.all(
-      balanceArray.map(async (b: any) => {
+      rawBalances.map(async (b: any) => {
         try {
-          console.log('🔍 Processing balance item:', b);
+          // Extract token address from Account object
+          const tokenAddress = b.token.publicKeyString?.toString() ?? b.token.toString();
+          const balanceValue = BigInt(b.balance ?? 0n);
 
-          // Extract token address (might be different property names)
-          const tokenAddress = b.token || b.account || b.address;
-          const balanceValue = b.balance || b.amount || b.value || '0';
-
-          console.log('  Token:', tokenAddress);
-          console.log('  Balance:', balanceValue);
+          console.log(`  Token: ${tokenAddress}, Balance: ${balanceValue}`);
 
           const metadata = await fetchTokenMetadata(tokenAddress);
-          const rawBalance = Number(balanceValue) || 0;
+          const rawBalance = Number(balanceValue);
           const decimals = metadata.decimals || 9;
           const balanceFormatted = rawBalance / (10 ** decimals);
 
           return {
             address: tokenAddress,
-            symbol: metadata.symbol || 'UNKNOWN',
-            balance: balanceValue?.toString() || '0',
-            balanceFormatted: isNaN(balanceFormatted) ? '0.000000000' : balanceFormatted.toFixed(decimals),
+            symbol: metadata.symbol,
+            balance: balanceValue.toString(),
+            balanceFormatted: balanceFormatted.toFixed(decimals),
             decimals
           };
         } catch (err) {
           console.error('Error formatting balance:', err);
           return {
-            address: b.token || b.account || 'unknown',
+            address: 'unknown',
             symbol: 'ERROR',
             balance: '0',
             balanceFormatted: '0.000000000',
@@ -163,54 +157,56 @@ export async function fetchBalances(seed: string, accountIndex: number = 0) {
 
 /**
  * Fetch token metadata (symbol, decimals)
+ * Uses the same pattern as server-side code
  */
 export async function fetchTokenMetadata(tokenAddress: string) {
+  // Check known tokens first (hardcoded fallback)
+  const knownTokens: Record<string, { symbol: string; decimals: number }> = {
+    'keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym': { symbol: 'KTA', decimals: 9 },
+    'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52': { symbol: 'WAVE', decimals: 9 },
+    'keeta_ant32bbs6vdcagr3lw4oxcl5vcf5gvrhm6qrdlmrwhzdljbtvb4psj7b3eapglm': { symbol: 'RIDE', decimals: 9 },
+  };
+
+  const known = knownTokens[tokenAddress];
+  if (known) {
+    return known;
+  }
+
   try {
     const client = createKeetaClient();
-    const info = await client.getAccountInfo({ account: tokenAddress });
 
-    let symbol = 'UNKNOWN';
-    let decimals = 9;
+    // Use getAccountsInfo (plural) which takes an array
+    const accountsInfo = await client.getAccountsInfo([tokenAddress]);
+    const info = accountsInfo[tokenAddress];
 
-    if (info?.data) {
-      // Try to parse metadata from account data
-      try {
-        const dataStr = typeof info.data === 'string' ? info.data : JSON.stringify(info.data);
+    if (info?.info) {
+      // Get symbol from info.name (Keeta stores token symbol here)
+      const symbol = info.info.name || tokenAddress.slice(0, 8) + '...';
 
-        // Extract symbol from various possible formats
-        if (dataStr.includes('"symbol"')) {
-          const symbolMatch = dataStr.match(/"symbol"\s*:\s*"([^"]+)"/);
-          if (symbolMatch) symbol = symbolMatch[1];
+      // Get decimals from metadata object
+      let decimals = 9; // Default
+      if (info.info.metadata) {
+        try {
+          // Metadata is base64 encoded
+          const metadataStr = atob(info.info.metadata);
+          const metaObj = JSON.parse(metadataStr);
+          decimals = Number(metaObj.decimalPlaces || metaObj.decimals || 9);
+        } catch (parseErr) {
+          console.warn(`Could not parse metadata for ${tokenAddress.slice(0, 12)}...`);
         }
-
-        // Extract decimals
-        if (dataStr.includes('"decimals"')) {
-          const decimalsMatch = dataStr.match(/"decimals"\s*:\s*(\d+)/);
-          if (decimalsMatch) decimals = parseInt(decimalsMatch[1]);
-        }
-      } catch (e) {
-        console.warn('Could not parse token metadata:', e);
       }
+
+      return { symbol, decimals };
     }
-
-    // Fallback: Check known tokens
-    const knownTokens: Record<string, { symbol: string; decimals: number }> = {
-      'keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym': { symbol: 'KTA', decimals: 9 },
-      'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52': { symbol: 'WAVE', decimals: 9 },
-      'keeta_ant32bbs6vdcagr3lw4oxcl5vcf5gvrhm6qrdlmrwhzdljbtvb4psj7b3eapglm': { symbol: 'RIDE', decimals: 9 },
-    };
-
-    const known = knownTokens[tokenAddress];
-    if (known) {
-      symbol = known.symbol;
-      decimals = known.decimals;
-    }
-
-    return { symbol, decimals };
   } catch (error) {
-    console.error('Error fetching token metadata:', error);
-    return { symbol: 'UNKNOWN', decimals: 9 };
+    console.warn(`Could not fetch metadata for ${tokenAddress.slice(0, 12)}...:`, error);
   }
+
+  // Default values if metadata not found
+  return {
+    symbol: tokenAddress.slice(0, 8) + '...',
+    decimals: 9
+  };
 }
 
 /**
