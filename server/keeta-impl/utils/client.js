@@ -53,10 +53,16 @@ export function createUserClient(seedHex, accountIndex = 0) {
 
 /**
  * Get the treasury account (for fee collection)
+ * If TREASURY_SEED is not set, defaults to OPS_SEED (treasury = ops)
  */
 export function getTreasuryAccount() {
   if (!treasuryAccount) {
-    const treasurySeed = seedFromHexEnv('TREASURY_SEED');
+    // Try TREASURY_SEED first, fallback to OPS_SEED if not set
+    const treasurySeedHex = process.env.TREASURY_SEED || process.env.OPS_SEED;
+    if (!treasurySeedHex) {
+      throw new Error('Either TREASURY_SEED or OPS_SEED must be set');
+    }
+    const treasurySeed = Buffer.from(treasurySeedHex.trim(), 'hex');
     treasuryAccount = KeetaNet.lib.Account.fromSeed(treasurySeed, 0);
     console.log('✅ Treasury account loaded:', treasuryAccount.publicKeyString.get());
   }

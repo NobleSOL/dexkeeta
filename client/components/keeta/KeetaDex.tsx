@@ -34,8 +34,10 @@ import {
   createPool as createPoolClient
 } from "@/lib/keeta-client";
 
-// API base URL - uses same origin as frontend (Vite dev server on 8080)
-const API_BASE = `${window.location.origin}/api`;
+// API base URL - uses environment variable if set, otherwise falls back to same origin
+// For production: set VITE_KEETA_API_BASE to your Railway backend URL (e.g., https://dexkeeta-production.up.railway.app/api)
+// For development: uses Vite dev server on same origin (localhost:8080/api)
+const API_BASE = import.meta.env.VITE_KEETA_API_BASE || `${window.location.origin}/api`;
 
 type KeetaWallet = {
   address: string;

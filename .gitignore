@@ -25,7 +25,20 @@ dist-ssr
 
 .config/
 
-# Environment variables
+# Environment variables (contains sensitive seeds/keys)
 .env
 .env.local
 .env.*.local
+.env.production
+
+# Keeta persistent storage (contains pool data and positions)
+keeta/.pools.json
+keeta/.pools.json.backup
+keeta/.liquidity-positions-*.json
+keeta/.transactions.json
+
+# Test scripts and temporary files
+keeta/*.mjs
+test-*.mjs
+test-*.cjs
+diagnose-*.mjs
