@@ -535,12 +535,14 @@ export async function executeSwap(
     console.log('✅ Transaction published:', result);
     console.log('📦 Builder blocks:', builder.blocks);
 
-    // Extract block hash from the second block (index 1)
-    // The first block is the receive, the second block is the send/swap
+    // Extract block hash from the third block (index 2)
+    // Block 0: User sends fee to treasury
+    // Block 1: User sends input token to pool
+    // Block 2: Pool sends output token to user (the actual swap)
     let blockHash = null;
-    if (builder.blocks && builder.blocks.length > 1) {
-      const block = builder.blocks[1]; // Get second block
-      console.log('📦 Second block:', block);
+    if (builder.blocks && builder.blocks.length > 2) {
+      const block = builder.blocks[2]; // Get third block (the swap)
+      console.log('📦 Third block (swap):', block);
 
       if (block && block.hash) {
         // Convert BlockHash to hex string
