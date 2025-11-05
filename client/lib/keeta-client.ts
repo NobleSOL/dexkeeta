@@ -535,14 +535,17 @@ export async function executeSwap(
     console.log('✅ Transaction published:', result);
     console.log('📦 Builder blocks:', builder.blocks);
 
-    // Extract block hash from the third block (index 2)
+    // Extract block hash from the last block (the actual swap)
+    // Transaction structure:
     // Block 0: User sends fee to treasury
     // Block 1: User sends input token to pool
-    // Block 2: Pool sends output token to user (the actual swap)
+    // Block 2+: Pool sends output token to user (the actual swap we want to show)
     let blockHash = null;
-    if (builder.blocks && builder.blocks.length > 2) {
-      const block = builder.blocks[2]; // Get third block (the swap)
-      console.log('📦 Third block (swap):', block);
+    if (builder.blocks && builder.blocks.length > 0) {
+      // Use the LAST block which should be the swap
+      const block = builder.blocks[builder.blocks.length - 1];
+      console.log(`📦 Last block (index ${builder.blocks.length - 1}):`, block);
+      console.log('📦 Total blocks:', builder.blocks.length);
 
       if (block && block.hash) {
         // Convert BlockHash to hex string
@@ -562,6 +565,10 @@ export async function executeSwap(
     }
 
     console.log('✅ Block hash extracted:', blockHash);
+    console.log('📊 All block hashes:', builder.blocks?.map((b, i) => ({
+      index: i,
+      hash: b.hash ? (typeof b.hash === 'string' ? b.hash : b.hash.toString('hex').toUpperCase()) : null
+    })));
 
     return {
       success: true,
