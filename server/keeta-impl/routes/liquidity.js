@@ -1,7 +1,8 @@
 // src/routes/liquidity.js
 import express from 'express';
 import { getPoolManager } from '../contracts/PoolManager.js';
-import { toAtomic } from '../utils/constants.js';
+import { Pool } from '../contracts/Pool.js';
+import { toAtomic, getPairKey } from '../utils/constants.js';
 import { fetchTokenDecimals, createUserClient } from '../utils/client.js';
 
 const router = express.Router();
@@ -187,6 +188,57 @@ router.get('/positions/:userAddress', async (req, res) => {
     });
   } catch (error) {
     console.error('Get positions error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/liquidity/register-pool
+ * Register a user-created pool and grant ops permissions
+ *
+ * Body: {
+ *   poolAddress: string,
+ *   tokenA: string,
+ *   tokenB: string,
+ *   creatorAddress: string
+ * }
+ */
+router.post('/register-pool', async (req, res) => {
+  try {
+    const { poolAddress, tokenA, tokenB, creatorAddress } = req.body;
+
+    if (!poolAddress || !tokenA || !tokenB || !creatorAddress) {
+      return res.status(400).json({
+        error: 'Missing required fields (poolAddress, tokenA, tokenB, creatorAddress)',
+      });
+    }
+
+    const poolManager = await getPoolManager();
+
+    // Transfer ownership and grant ops permissions
+    await poolManager.transferPoolOwnership(poolAddress, creatorAddress, tokenA, tokenB);
+
+    // Create and register pool instance
+    const pool = new Pool(poolAddress, tokenA, tokenB);
+    await pool.initialize();
+
+    const pairKey = getPairKey(tokenA, tokenB);
+    poolManager.pools.set(pairKey, pool);
+    poolManager.poolAddresses.set(pairKey, poolAddress);
+
+    // Save to persistent storage
+    await poolManager.savePools();
+
+    res.json({
+      success: true,
+      poolAddress,
+      message: 'Pool registered with ops permissions granted',
+    });
+  } catch (error) {
+    console.error('Register pool error:', error);
     res.status(500).json({
       success: false,
       error: error.message,

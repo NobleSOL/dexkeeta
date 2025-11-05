@@ -476,6 +476,31 @@ export default function KeetaDex() {
       );
 
       if (result.success) {
+        // Register pool with backend to grant ops permissions
+        console.log('📝 Registering pool with backend...');
+        try {
+          const registerResponse = await fetch(`${API_BASE}/liquidity/register-pool`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              poolAddress: result.poolAddress,
+              tokenA: newPoolTokenA,
+              tokenB: newPoolTokenB,
+              creatorAddress: wallet.address,
+            }),
+          });
+
+          const registerData = await registerResponse.json();
+
+          if (!registerData.success) {
+            console.warn('⚠️ Pool registered but permission setup may have failed:', registerData.error);
+          } else {
+            console.log('✅ Pool registered with ops permissions');
+          }
+        } catch (error) {
+          console.error('❌ Failed to register pool with backend:', error);
+        }
+
         // Build explorer link
         const explorerUrl = result.blockHash
           ? `https://explorer.test.keeta.com/block/${result.blockHash}`
@@ -486,7 +511,6 @@ export default function KeetaDex() {
           description: (
             <div className="space-y-1">
               <div>Added initial liquidity: {liqAmountA} + {liqAmountB}</div>
-              <div className="text-xs text-yellow-400">⚠️ Pool needs SEND_ON_BEHALF permission to enable swaps</div>
               <a
                 href={explorerUrl}
                 target="_blank"
