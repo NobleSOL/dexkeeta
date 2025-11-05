@@ -30,7 +30,8 @@ import {
   getSwapQuote as getSwapQuoteClient,
   executeSwap as executeSwapClient,
   addLiquidity as addLiquidityClient,
-  removeLiquidity as removeLiquidityClient
+  removeLiquidity as removeLiquidityClient,
+  createPool as createPoolClient
 } from "@/lib/keeta-client";
 
 // API base URL - uses same origin as frontend (Vite dev server on 8080)
@@ -458,8 +459,74 @@ export default function KeetaDex() {
   }
 
   async function createPool() {
-    // Pool creation requires backend infrastructure - silently disabled for client-only deployment
-    return;
+    if (!wallet || !newPoolTokenA || !newPoolTokenB || !liqAmountA || !liqAmountB) return;
+
+    setCreatingPool(true);
+    try {
+      console.log('🏊 Creating new pool with client-side transaction signing...');
+
+      // Execute create pool using client-side implementation
+      const result = await createPoolClient(
+        wallet.seed,
+        newPoolTokenA,
+        newPoolTokenB,
+        liqAmountA,
+        liqAmountB,
+        wallet.accountIndex || 0
+      );
+
+      if (result.success) {
+        // Build explorer link
+        const explorerUrl = result.blockHash
+          ? `https://explorer.test.keeta.com/block/${result.blockHash}`
+          : `https://explorer.test.keeta.com/account/${result.poolAddress}`;
+
+        toast({
+          title: "Pool Created!",
+          description: (
+            <div className="space-y-1">
+              <div>Added initial liquidity: {liqAmountA} + {liqAmountB}</div>
+              <div className="text-xs text-yellow-400">⚠️ Pool needs SEND_ON_BEHALF permission to enable swaps</div>
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sky-400 hover:text-sky-300 underline text-sm flex items-center gap-1"
+              >
+                View Pool on Explorer
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </div>
+          ),
+        });
+
+        // Clear form
+        setNewPoolTokenA("");
+        setNewPoolTokenB("");
+        setLiqAmountA("");
+        setLiqAmountB("");
+
+        // Wait for blockchain to sync before refreshing
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Refresh data
+        await refreshBalances();
+        await loadPools();
+        await fetchPositions();
+      } else {
+        throw new Error(result.error || "Failed to create pool");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Pool Creation Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingPool(false);
+    }
   }
 
   async function addLiquidity() {
@@ -512,6 +579,9 @@ export default function KeetaDex() {
         // Clear form
         setLiqAmountA("");
         setLiqAmountB("");
+
+        // Wait for blockchain to sync before refreshing
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Refresh data
         await refreshBalances();
@@ -577,6 +647,9 @@ export default function KeetaDex() {
             </div>
           ),
         });
+
+        // Wait for blockchain to sync before refreshing
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Refresh data
         await refreshBalances();
@@ -1115,9 +1188,27 @@ export default function KeetaDex() {
                 <CardDescription>Provide liquidity to Keeta pools and earn trading fees</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Mode Toggle - Create Pool disabled for client-only deployment */}
+                {/* Mode Toggle */}
+                <div className="flex gap-2">
+                  <Button
+                    variant={!createMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCreateMode(false)}
+                    className="flex-1"
+                  >
+                    Select Pool
+                  </Button>
+                  <Button
+                    variant={createMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCreateMode(true)}
+                    className="flex-1"
+                  >
+                    Create Pool
+                  </Button>
+                </div>
 
-                {true ? (
+                {!createMode ? (
                   // Select Existing Pool Mode
                   <div className="rounded-lg bg-secondary/40 p-3">
                     <label className="text-xs text-muted-foreground mb-2 block">Select Pool</label>
@@ -1134,10 +1225,8 @@ export default function KeetaDex() {
                       ))}
                     </select>
                   </div>
-                ) : null}
-
-                {false && (
-                  // Create New Pool Mode - disabled for client-only deployment
+                ) : (
+                  // Create New Pool Mode
                   <div className="space-y-3">
                     {/* Token A Input - Matching swap design */}
                     <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">

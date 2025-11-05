@@ -654,6 +654,97 @@ export async function addLiquidity(
 }
 
 /**
+ * Generate a deterministic pool identifier from two token addresses
+ */
+export function generatePoolIdentifier(tokenA: string, tokenB: string): string {
+  // Sort tokens to ensure consistent identifier regardless of order
+  const [token0, token1] = tokenA < tokenB ? [tokenA, tokenB] : [tokenB, tokenA];
+
+  // Create a simple deterministic identifier using token addresses
+  // In production, this would use a more sophisticated hash
+  const combined = `pool_${token0.slice(-8)}_${token1.slice(-8)}`;
+
+  return combined;
+}
+
+/**
+ * Create a new pool by adding initial liquidity
+ * Note: Pool won't be functional for swaps until ops account grants SEND_ON_BEHALF permission
+ */
+export async function createPool(
+  seed: string,
+  tokenA: string,
+  tokenB: string,
+  amountA: string,
+  amountB: string,
+  accountIndex: number = 0
+): Promise<{ success: boolean; poolIdentifier?: string; poolAddress?: string; blockHash?: string; error?: string }> {
+  try {
+    console.log('🏊 Creating new pool...');
+
+    // Generate deterministic pool identifier
+    const poolIdentifier = generatePoolIdentifier(tokenA, tokenB);
+
+    // Create client from seed
+    const client = createKeetaClientFromSeed(seed, accountIndex);
+    const seedBytes = hexToBytes(seed);
+    const userAccount = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
+
+    // Generate pool account from identifier
+    // In production, this would derive from a standard seed + identifier
+    const poolSeed = new TextEncoder().encode(poolIdentifier);
+    const poolAccount = KeetaSDK.lib.Account.fromSeed(poolSeed, 0);
+    const poolAddress = poolAccount.publicKeyString.get();
+
+    console.log(`📍 Pool address: ${poolAddress}`);
+    console.log(`🔑 Pool identifier: ${poolIdentifier}`);
+
+    // Convert amounts to atomic units (assuming 9 decimals)
+    const atomicAmountA = BigInt(Math.floor(parseFloat(amountA) * 1e9));
+    const atomicAmountB = BigInt(Math.floor(parseFloat(amountB) * 1e9));
+
+    // Build transaction to add initial liquidity
+    const builder = client.initBuilder();
+    const tokenAAccount = KeetaSDK.lib.Account.fromPublicKeyString(tokenA);
+    const tokenBAccount = KeetaSDK.lib.Account.fromPublicKeyString(tokenB);
+
+    // User sends both tokens to the new pool
+    builder.send(poolAccount, atomicAmountA, tokenAAccount);
+    builder.send(poolAccount, atomicAmountB, tokenBAccount);
+
+    // Publish transaction
+    const result = await client.publishBuilder(builder);
+
+    // Extract block hash
+    let blockHash = null;
+    if (builder.blocks && builder.blocks.length > 1) {
+      const block = builder.blocks[1];
+      if (block && block.hash) {
+        blockHash = typeof block.hash === 'string'
+          ? block.hash.toUpperCase()
+          : block.hash.toString('hex').toUpperCase();
+      }
+    }
+
+    console.log('✅ Pool created with initial liquidity!');
+    console.log('⚠️  Note: Pool needs SEND_ON_BEHALF permission from ops account to enable swaps');
+
+    return {
+      success: true,
+      poolIdentifier,
+      poolAddress,
+      blockHash: blockHash || undefined,
+    };
+  } catch (error: any) {
+    console.error('❌ Create pool error:', error);
+    return {
+      success: false,
+      error: error.message || 'Unknown error',
+    };
+  }
+}
+
+/**
  * Remove liquidity from a pool
  * Note: This requires SEND_ON_BEHALF permission which the pool must have granted
  */
