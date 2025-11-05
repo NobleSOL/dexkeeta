@@ -294,13 +294,20 @@ export default function KeetaDex() {
 
   async function fetchPositions() {
     if (!wallet) return;
-    try {
-      const res = await fetch(`${API_BASE}/liquidity/positions/${wallet.address}`);
-      const data = await res.json();
-      setPositions(data.positions || []);
-    } catch (error) {
-      console.error("Failed to fetch positions:", error);
-    }
+
+    // TODO: Implement client-side position fetching
+    // For now, return empty positions since /api/liquidity/positions doesn't exist on Vercel
+    console.log('📋 Position fetching not yet implemented for client-side');
+    setPositions([]);
+
+    // Old server-side code (commented out):
+    // try {
+    //   const res = await fetch(`${API_BASE}/liquidity/positions/${wallet.address}`);
+    //   const data = await res.json();
+    //   setPositions(data.positions || []);
+    // } catch (error) {
+    //   console.error("Failed to fetch positions:", error);
+    // }
   }
 
   async function getSwapQuote() {
