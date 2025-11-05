@@ -21,6 +21,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { KeetaPoolCard, KeetaPoolCardData } from "@/components/keeta/KeetaPoolCard";
+import { generateWallet as generateWalletClient, getAddressFromSeed, fetchBalances } from "@/lib/keeta-client";
 
 // API base URL - uses same origin as frontend (Vite dev server on 8080)
 const API_BASE = `${window.location.origin}/api`;
@@ -158,29 +159,19 @@ export default function KeetaDex() {
   async function generateWallet() {
     setLoading(true);
     try {
-      console.log('🔵 Generating wallet, API_BASE:', API_BASE);
-      const res = await fetch(`${API_BASE}/wallet`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate" }),
-      });
-      console.log('🔵 Response status:', res.status);
-      const data = await res.json();
-      console.log('🔵 Response data:', data);
+      console.log('🔵 Generating wallet (client-side)...');
 
-      console.log('🔵 Checking data.seed:', data.seed);
-      console.log('🔵 Type of data.seed:', typeof data.seed);
+      // Generate wallet client-side (no API call needed!)
+      const { seed, address } = generateWalletClient();
 
-      if (data.seed) {
-        console.log('✅ Seed received, showing modal. Setting newSeedBackup to:', data.seed);
-        // Show seed backup modal instead of immediately saving
-        setNewSeedBackup(data.seed);
-        setSeedBackupConfirmed(false);
-        console.log('✅ State updated. newSeedBackup should now be set.');
-      } else {
-        console.error('❌ No seed in response:', data);
-        throw new Error(data.error || "Failed to generate wallet");
-      }
+      console.log('✅ Wallet generated client-side');
+      console.log('✅ Address:', address);
+      console.log('✅ Seed:', seed.substring(0, 10) + '...');
+
+      // Show seed backup modal
+      setNewSeedBackup(seed);
+      setSeedBackupConfirmed(false);
+      console.log('✅ Showing seed backup modal');
     } catch (error: any) {
       console.error('❌ Generate wallet error:', error);
       toast({
@@ -213,45 +204,38 @@ export default function KeetaDex() {
   async function importWalletWithSeed(seed: string, accountIndex: number = 0) {
     setLoading(true);
     try {
-      console.log('🔍 Frontend: Sending seed to backend:', seed);
-      console.log('🔍 Frontend: Account index:', accountIndex);
+      console.log('🔍 Importing wallet (client-side)...');
+      console.log('🔍 Account index:', accountIndex);
 
       // Clear old positions data before importing new wallet
       setPositions([]);
       setPools([]);
 
-      const res = await fetch(`${API_BASE}/wallet`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "import", seed: seed, accountIndex }),
+      // Derive address from seed (client-side)
+      const address = getAddressFromSeed(seed, accountIndex);
+      console.log('✅ Address derived:', address);
+
+      // Fetch balances from blockchain (client-side)
+      console.log('📊 Fetching balances from Keeta blockchain...');
+      const tokens = await fetchBalances(address);
+      console.log('✅ Balances fetched:', tokens);
+
+      const walletData: KeetaWallet = {
+        address,
+        seed,
+        accountIndex,
+        tokens,
+      };
+
+      setWallet(walletData);
+      localStorage.setItem("keetaWallet", JSON.stringify(walletData));
+
+      console.log('✅ Wallet imported and saved to localStorage');
+
+      toast({
+        title: "Wallet Ready!",
+        description: `Connected to ${address.substring(0, 20)}... with ${tokens.length} tokens`,
       });
-      const data = await res.json();
-
-      console.log('🔍 Frontend: Received from backend:', {
-        seed: data.seed,
-        address: data.address,
-        accountIndex: data.accountIndex
-      });
-
-      if (data.seed) {
-        const walletData: KeetaWallet = {
-          address: data.address,
-          seed: data.seed,
-          accountIndex: data.accountIndex || 0,
-          tokens: data.tokens || [],
-        };
-        setWallet(walletData);
-        localStorage.setItem("keetaWallet", JSON.stringify(walletData));
-
-        console.log('🔍 Frontend: Stored in localStorage:', walletData);
-
-        toast({
-          title: "Wallet Ready!",
-          description: `Your wallet has been successfully set up (index ${walletData.accountIndex})`,
-        });
-      } else {
-        throw new Error(data.error || "Failed to load wallet");
-      }
     } catch (error: any) {
       toast({
         title: "Error",
