@@ -162,9 +162,8 @@ export async function fetchBalances(seed: string, accountIndex: number = 0) {
 export async function fetchTokenMetadata(tokenAddress: string) {
   // Check known tokens first (hardcoded fallback)
   const knownTokens: Record<string, { symbol: string; decimals: number }> = {
-    'keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym': { symbol: 'KTA', decimals: 9 },
-    'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52': { symbol: 'WAVE', decimals: 9 },
-    'keeta_ant32bbs6vdcagr3lw4oxcl5vcf5gvrhm6qrdlmrwhzdljbtvb4psj7b3eapglm': { symbol: 'RIDE', decimals: 9 },
+    'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52': { symbol: 'KTA', decimals: 9 },
+    'keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo': { symbol: 'RIDE', decimals: 9 },
   };
 
   const known = knownTokens[tokenAddress];
@@ -175,13 +174,19 @@ export async function fetchTokenMetadata(tokenAddress: string) {
   try {
     const client = createKeetaClient();
 
+    console.log(`🔍 Fetching metadata for: ${tokenAddress}`);
+
     // Use getAccountsInfo (plural) which takes an array
     const accountsInfo = await client.getAccountsInfo([tokenAddress]);
+    console.log(`📊 Raw accountsInfo response:`, accountsInfo);
+
     const info = accountsInfo[tokenAddress];
+    console.log(`📊 Info for ${tokenAddress.slice(0, 20)}...:`, info);
 
     if (info?.info) {
       // Get symbol from info.name (Keeta stores token symbol here)
       const symbol = info.info.name || tokenAddress.slice(0, 8) + '...';
+      console.log(`  Symbol from info.name: ${symbol}`);
 
       // Get decimals from metadata object
       let decimals = 9; // Default
@@ -190,12 +195,14 @@ export async function fetchTokenMetadata(tokenAddress: string) {
           // Metadata is base64 encoded
           const metadataStr = atob(info.info.metadata);
           const metaObj = JSON.parse(metadataStr);
+          console.log(`  Parsed metadata:`, metaObj);
           decimals = Number(metaObj.decimalPlaces || metaObj.decimals || 9);
         } catch (parseErr) {
           console.warn(`Could not parse metadata for ${tokenAddress.slice(0, 12)}...`);
         }
       }
 
+      console.log(`✅ Final metadata: ${symbol}, ${decimals} decimals`);
       return { symbol, decimals };
     }
   } catch (error) {
