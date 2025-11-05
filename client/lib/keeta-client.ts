@@ -218,20 +218,86 @@ export async function fetchTokenMetadata(tokenAddress: string) {
 }
 
 /**
- * Fetch available pools (from API with on-chain data already included)
- * Pool reserves need to be fetched server-side since we can't query arbitrary addresses client-side
+ * Fetch pool reserves directly from blockchain
+ * Queries the pool account's token balances
+ */
+async function fetchPoolReserves(poolAddress: string, tokenA: string, tokenB: string) {
+  try {
+    // Create a temporary account from the pool address to query its balances
+    const client = createKeetaClient();
+    const poolAccount = KeetaSDK.lib.Account.fromPublicKeyString(poolAddress);
+
+    // Query balances for the pool account
+    const rawBalances = await client.allBalances({ account: poolAccount });
+
+    // Extract token balances
+    let reserveA = 0n;
+    let reserveB = 0n;
+
+    for (const b of rawBalances) {
+      const tokenAddr = b.token.publicKeyString?.toString() ?? b.token.toString();
+      const balance = BigInt(b.balance ?? 0n);
+
+      if (tokenAddr === tokenA) {
+        reserveA = balance;
+      } else if (tokenAddr === tokenB) {
+        reserveB = balance;
+      }
+    }
+
+    return { reserveA, reserveB };
+  } catch (error) {
+    console.warn(`Could not fetch reserves for pool ${poolAddress}:`, error);
+    return { reserveA: 0n, reserveB: 0n };
+  }
+}
+
+/**
+ * Fetch available pools with live reserves from blockchain
+ * Uses hardcoded pool list + fetches reserves directly from chain
  */
 export async function fetchPools() {
   try {
-    // Fetch pool list from API (with reserves already included)
-    const response = await fetch(`${window.location.origin}/api/pools`);
-    if (!response.ok) throw new Error('Failed to fetch pools');
+    // Hardcoded known pools (pool addresses are deterministic)
+    const knownPools = [
+      {
+        poolAddress: 'keeta_arwmubo5gxl7vzz3rulmcqyts7webl73zakb5d6hsm2khf3b5xsbil5m3bpek',
+        tokenA: 'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52', // KTA
+        tokenB: 'keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym', // WAVE
+        symbolA: 'KTA',
+        symbolB: 'WAVE',
+        decimalsA: 9,
+        decimalsB: 9,
+      },
+      // Add more pools here as they're created
+    ];
 
-    const data = await response.json();
-    const poolList = data.pools || [];
+    // Fetch reserves for each pool from blockchain
+    const poolsWithReserves = await Promise.all(
+      knownPools.map(async (pool) => {
+        const { reserveA, reserveB } = await fetchPoolReserves(
+          pool.poolAddress,
+          pool.tokenA,
+          pool.tokenB
+        );
 
-    // Return pools as-is since server should enrich them
-    return poolList;
+        const reserveAHuman = Number(reserveA) / (10 ** pool.decimalsA);
+        const reserveBHuman = Number(reserveB) / (10 ** pool.decimalsB);
+
+        return {
+          ...pool,
+          reserveA: reserveA.toString(),
+          reserveB: reserveB.toString(),
+          reserveAHuman,
+          reserveBHuman,
+          totalShares: '0', // TODO: Track total shares
+          priceAtoB: reserveAHuman > 0 ? reserveBHuman / reserveAHuman : 0,
+          priceBtoA: reserveBHuman > 0 ? reserveAHuman / reserveBHuman : 0,
+        };
+      })
+    );
+
+    return poolsWithReserves;
   } catch (error) {
     console.error('Error fetching pools:', error);
     return [];
