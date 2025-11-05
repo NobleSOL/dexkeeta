@@ -2,16 +2,15 @@
 nixPkgs = ['nodejs_20', 'pnpm']
 
 [phases.install]
-cmds = ['pnpm install --frozen-lockfile']
+cmds = ['pnpm install --frozen-lockfile', 'pnpm add -D tsx']
 
 [phases.build]
 cmds = [
   'pwd',
   'ls -la',
   'ls -la server/ || echo "server dir not found"',
-  'pnpm build:client',
-  'pnpm build:server'
+  'pnpm build:client'
 ]
 
 [start]
-cmd = 'node dist/server/node-build.mjs'
+cmd = 'npx tsx server/node-build.ts'
