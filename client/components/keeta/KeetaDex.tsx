@@ -145,8 +145,8 @@ export default function KeetaDex() {
   // Fetch pools and positions when wallet is loaded
   useEffect(() => {
     if (wallet?.address) {
-      fetchPools();
-      fetchPositions();
+      fetchPools().catch(err => console.error('Error fetching pools:', err));
+      fetchPositions().catch(err => console.error('Error fetching positions:', err));
     }
   }, [wallet?.address]);
 
