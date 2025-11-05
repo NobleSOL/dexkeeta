@@ -14,11 +14,22 @@ export function createKeetaClient() {
 }
 
 /**
+ * Convert hex string to Uint8Array (browser-compatible)
+ */
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return bytes;
+}
+
+/**
  * Create a UserClient from a seed for signing transactions
  */
 export function createKeetaClientFromSeed(seed: string, accountIndex: number = 0) {
-  const seedBuffer = Buffer.from(seed, 'hex');
-  const account = lib.Account.fromSeed(seedBuffer, accountIndex);
+  const seedBytes = hexToBytes(seed);
+  const account = lib.Account.fromSeed(seedBytes, accountIndex);
   return UserClient.fromNetwork(KEETA_NETWORK as any, account);
 }
 
@@ -26,8 +37,8 @@ export function createKeetaClientFromSeed(seed: string, accountIndex: number = 0
  * Get account address from seed
  */
 export function getAddressFromSeed(seed: string, accountIndex: number = 0): string {
-  const seedBuffer = Buffer.from(seed, 'hex');
-  const account = lib.Account.fromSeed(seedBuffer, accountIndex);
+  const seedBytes = hexToBytes(seed);
+  const account = lib.Account.fromSeed(seedBytes, accountIndex);
   return account.publicKeyString.get();
 }
 
