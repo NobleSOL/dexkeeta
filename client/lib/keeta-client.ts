@@ -64,22 +64,38 @@ export function generateWallet(): { seed: string; address: string } {
  */
 export async function fetchBalances(address: string) {
   try {
+    console.log('🔍 fetchBalances called for:', address);
     const client = createKeetaClient();
+    console.log('✅ Client created');
     const balances = await client.getAllBalances({ account: address });
+    console.log('✅ Raw balances from blockchain:', balances);
 
     // Format balances with metadata
     const formattedBalances = await Promise.all(
       balances.map(async (b: any) => {
-        const metadata = await fetchTokenMetadata(b.token);
-        const balanceFormatted = Number(b.balance) / (10 ** metadata.decimals);
+        try {
+          const metadata = await fetchTokenMetadata(b.token);
+          const rawBalance = Number(b.balance) || 0;
+          const decimals = metadata.decimals || 9;
+          const balanceFormatted = rawBalance / (10 ** decimals);
 
-        return {
-          address: b.token,
-          symbol: metadata.symbol,
-          balance: b.balance.toString(),
-          balanceFormatted: balanceFormatted.toFixed(metadata.decimals),
-          decimals: metadata.decimals
-        };
+          return {
+            address: b.token,
+            symbol: metadata.symbol || 'UNKNOWN',
+            balance: b.balance?.toString() || '0',
+            balanceFormatted: isNaN(balanceFormatted) ? '0.000000000' : balanceFormatted.toFixed(decimals),
+            decimals
+          };
+        } catch (err) {
+          console.error('Error formatting balance:', err);
+          return {
+            address: b.token,
+            symbol: 'ERROR',
+            balance: '0',
+            balanceFormatted: '0.000000000',
+            decimals: 9
+          };
+        }
       })
     );
 
