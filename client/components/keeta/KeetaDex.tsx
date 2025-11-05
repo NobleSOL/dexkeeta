@@ -469,6 +469,15 @@ export default function KeetaDex() {
       return;
     }
 
+    // Pool creation requires backend infrastructure (not available on Vercel)
+    toast({
+      title: "Pool Creation Unavailable",
+      description: "Pool creation requires backend infrastructure. Please use existing pools or contact support to create new pools.",
+      variant: "destructive",
+    });
+    return;
+
+    /* Pool creation disabled for client-only deployment
     setCreatingPool(true);
     try {
       // Step 1: Create the pool
@@ -486,6 +495,7 @@ export default function KeetaDex() {
       if (!createData.success) {
         throw new Error(createData.error || "Failed to create pool");
       }
+    */
 
       // Step 2: Add initial liquidity to the new pool
       const liqRes = await fetch(`${API_BASE}/liquidity/add`, {

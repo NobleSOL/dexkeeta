@@ -164,7 +164,7 @@ export async function fetchTokenMetadata(tokenAddress: string) {
   const knownTokens: Record<string, { symbol: string; decimals: number }> = {
     'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52': { symbol: 'KTA', decimals: 9 },
     'keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym': { symbol: 'WAVE', decimals: 9 },
-    'keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo': { symbol: 'RIDE', decimals: 9 },
+    'keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo': { symbol: 'RIDE', decimals: 5 },
   };
 
   const known = knownTokens[tokenAddress];
