@@ -416,8 +416,8 @@ export async function getSwapQuote(
     const decimalsIn = isAtoB ? pool.decimalsA : pool.decimalsB;
     const decimalsOut = isAtoB ? pool.decimalsB : pool.decimalsA;
 
-    // Convert amountIn to atomic units
-    const amountInAtomic = BigInt(Math.floor(parseFloat(amountIn) * 1e9));
+    // Convert amountIn to atomic units using actual token decimals
+    const amountInAtomic = BigInt(Math.floor(parseFloat(amountIn) * Math.pow(10, decimalsIn)));
 
     // Calculate fee (0.3% = 30 bps)
     const feeAmount = (amountInAtomic * 30n) / 10000n;
