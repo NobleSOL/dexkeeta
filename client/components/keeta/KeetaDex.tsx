@@ -1017,14 +1017,14 @@ export default function KeetaDex() {
                     <CardTitle>Active Pools</CardTitle>
                     <CardDescription>Explore liquidity pools and start earning</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="overflow-visible">
                     {pools.length === 0 ? (
                       <div className="text-center py-12 text-muted-foreground">
                         <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
                         <p>No active pools yet. Be the first to create one!</p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                         {pools.map((pool) => {
                           // Find user's position in this pool
                           const userPosition = positions.find(

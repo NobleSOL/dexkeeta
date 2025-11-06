@@ -64,9 +64,9 @@ export function KeetaPoolCard({
     : 0;
 
   return (
-    <div className={`rounded-xl border bg-card/40 backdrop-blur p-4 transition-all hover:border-brand/50 hover:shadow-lg ${hasPosition ? 'border-brand/30 bg-brand/5' : 'border-border/60'}`}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
+    <div className={`rounded-xl border bg-card/40 backdrop-blur p-3 sm:p-4 transition-all hover:border-brand/50 hover:shadow-lg w-full min-w-0 ${hasPosition ? 'border-brand/30 bg-brand/5' : 'border-border/60'}`}>
+      <div className="flex items-start justify-between mb-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           {/* Token pair display */}
           <div className="flex items-center">
             {pool.symbolA === "KTA" ? (
@@ -86,7 +86,7 @@ export function KeetaPoolCard({
               {pool.symbolB.slice(0, 2)}
             </div>
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="font-semibold text-sm">
               {pool.symbolA}/{pool.symbolB}
             </div>
@@ -97,7 +97,7 @@ export function KeetaPoolCard({
               href={`https://explorer.test.keeta.com/account/${pool.poolAddress}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
+              className="text-xs text-sky-400 hover:text-sky-300 transition-colors truncate block max-w-[200px]"
             >
               {pool.poolAddress.slice(0, 12)}...{pool.poolAddress.slice(-8)}
             </a>
@@ -111,17 +111,17 @@ export function KeetaPoolCard({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3">
         {/* TVL */}
-        <div className="rounded-lg border border-border/40 bg-secondary/40 p-2">
+        <div className="rounded-lg border border-border/40 bg-secondary/40 p-2 min-w-0">
           <div className="text-xs text-muted-foreground mb-1">Total Liquidity</div>
-          <div className="text-xs font-semibold leading-tight">{tvl}</div>
+          <div className="text-xs font-semibold leading-tight break-words">{tvl}</div>
         </div>
 
         {/* APY */}
-        <div className="rounded-lg border border-border/40 bg-secondary/40 p-2">
+        <div className="rounded-lg border border-border/40 bg-secondary/40 p-2 min-w-0">
           <div className="flex items-center gap-1 mb-1">
-            <TrendingUp className="h-3 w-3 text-green-400" />
+            <TrendingUp className="h-3 w-3 text-green-400 flex-shrink-0" />
             <span className="text-xs text-muted-foreground">Est. APY</span>
           </div>
           <div className="text-xs font-semibold text-green-400">{estimatedAPY}%</div>
