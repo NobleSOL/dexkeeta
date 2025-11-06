@@ -21,6 +21,10 @@ export class PoolManager {
    */
   async initialize() {
     await this.loadPools();
+
+    // Discover pools on-chain (in case persistent storage was lost)
+    await this.discoverPoolsOnChain();
+
     console.log(`✅ PoolManager initialized with ${this.pools.size} pools`);
     return this;
   }
@@ -71,6 +75,96 @@ export class PoolManager {
     }
 
     await fs.writeFile(this.persistencePath, JSON.stringify(poolData, null, 2));
+  }
+
+  /**
+   * Discover pools on-chain by scanning for STORAGE accounts with SILVERBACK_POOL names
+   * This allows automatic recovery if persistent storage (.pools.json) is lost
+   */
+  async discoverPoolsOnChain() {
+    try {
+      console.log('🔍 Discovering pools on-chain...');
+
+      const { getExplorerClient } = await import('../utils/explorerClient.js');
+      const explorerClient = getExplorerClient();
+
+      // Query all STORAGE accounts owned by ops
+      const { getOpsAccount } = await import('../utils/client.js');
+      const ops = getOpsAccount();
+      const opsAddress = ops.publicKeyString.get();
+
+      // Fetch account info for ops to find created STORAGE accounts
+      const accountInfo = await explorerClient.fetchAccount(opsAddress);
+
+      if (!accountInfo || !accountInfo.createdAccounts) {
+        console.log('⚠️ No created accounts found for ops');
+        return;
+      }
+
+      // Filter for STORAGE accounts with SILVERBACK_POOL prefix
+      let discovered = 0;
+      for (const createdAddress of accountInfo.createdAccounts) {
+        try {
+          const accountData = await explorerClient.fetchAccount(createdAddress);
+
+          if (accountData &&
+              accountData.accountType === 'STORAGE' &&
+              accountData.name &&
+              accountData.name.startsWith('SILVERBACK_POOL_')) {
+
+            // Parse description to extract token addresses
+            // Format: "Liquidity pool for keeta_xxx... / keeta_yyy..."
+            const desc = accountData.description || '';
+            const matches = desc.match(/keeta_([a-z0-9]+)\.\.\. \/ keeta_([a-z0-9]+)\.\.\./);
+
+            if (!matches) {
+              console.warn(`⚠️ Could not parse pool description: ${desc}`);
+              continue;
+            }
+
+            // Reconstruct full addresses from description prefixes
+            // We need to query token balances to find the full addresses
+            const balances = accountData.balances || {};
+            const tokenAddresses = Object.keys(balances).filter(addr => addr.startsWith('keeta_'));
+
+            if (tokenAddresses.length < 2) {
+              console.warn(`⚠️ Pool ${createdAddress} has less than 2 tokens`);
+              continue;
+            }
+
+            const [tokenA, tokenB] = tokenAddresses;
+            const pairKey = getPairKey(tokenA, tokenB);
+
+            // Skip if already loaded
+            if (this.pools.has(pairKey)) {
+              continue;
+            }
+
+            // Create and register pool
+            const pool = new Pool(createdAddress, tokenA, tokenB);
+            await pool.initialize();
+
+            this.pools.set(pairKey, pool);
+            this.poolAddresses.set(pairKey, createdAddress);
+
+            discovered++;
+            console.log(`✅ Discovered pool: ${pairKey} at ${createdAddress}`);
+          }
+        } catch (err) {
+          console.warn(`⚠️ Error checking account ${createdAddress}:`, err.message);
+        }
+      }
+
+      if (discovered > 0) {
+        console.log(`🎉 Discovered ${discovered} new pools on-chain`);
+        // Save discovered pools to persistent storage
+        await this.savePools();
+      } else {
+        console.log('✓ No new pools discovered');
+      }
+    } catch (error) {
+      console.error('❌ Error discovering pools on-chain:', error);
+    }
   }
 
   /**
