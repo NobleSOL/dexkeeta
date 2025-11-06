@@ -21,6 +21,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { KeetaPoolCard, KeetaPoolCardData } from "@/components/keeta/KeetaPoolCard";
+import QuickFill from "@/components/shared/QuickFill";
 import {
   generateWallet as generateWalletClient,
   getAddressFromSeed,
@@ -135,17 +136,6 @@ export default function KeetaDex() {
     }
   }
 
-  // Set swap amount to a percentage of user's balance
-  function setSwapPercentage(percent: number) {
-    if (!wallet || !swapTokenIn) return;
-
-    const token = wallet.tokens.find(t => t.address === swapTokenIn);
-    if (!token) return;
-
-    const balance = parseFloat(token.balanceFormatted);
-    const amount = (balance * percent / 100).toFixed(token.decimals);
-    setSwapAmount(amount);
-  }
 
   // Sort and filter tokens - KTA always first, then show top 5 (or all if expanded)
   const sortedTokens = wallet?.tokens.sort((a, b) => {
@@ -1092,6 +1082,16 @@ export default function KeetaDex() {
                 <CardDescription>Trade tokens on Keeta Network</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* QuickFill header row */}
+                <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Select a share of your balance</span>
+                  <QuickFill
+                    balance={swapTokenIn && wallet ? parseFloat(wallet.tokens.find(t => t.address === swapTokenIn)?.balanceFormatted || "0") : undefined}
+                    onSelect={setSwapAmount}
+                    percents={[25, 50, 75, 100]}
+                  />
+                </div>
+
                 {/* From Token Input */}
                 <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">
                   <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
@@ -1124,22 +1124,6 @@ export default function KeetaDex() {
                       className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60"
                     />
                   </div>
-
-                  {/* Percentage buttons */}
-                  {swapTokenIn && (
-                    <div className="flex gap-2 mt-2">
-                      {[25, 50, 75, 100].map((percent) => (
-                        <button
-                          key={percent}
-                          type="button"
-                          onClick={() => setSwapPercentage(percent)}
-                          className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-border/60 bg-secondary/40 hover:bg-secondary/80 transition-colors"
-                        >
-                          {percent}%
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
                 {/* Swap Arrow - Vertical with toggle */}
