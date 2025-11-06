@@ -13,4 +13,4 @@ cmds = [
 ]
 
 [start]
-cmd = 'node check-files.mjs && npx tsx server/node-build.ts'
+cmd = 'node start.mjs'
