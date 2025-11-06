@@ -240,7 +240,9 @@ export class Pool {
     };
 
     console.log('🚀 Publishing swap request...');
-    const requestBlock = await userClient.createSwapRequest(swapRequest);
+    const requestBlock = await userClient.createSwapRequest(swapRequest, {
+      account: userAccount,
+    });
     const requestHash = requestBlock?.hash?.toString() || requestBlock?.blockHash || 'unknown';
     console.log(`✅ Swap request created: ${requestHash}`);
 
