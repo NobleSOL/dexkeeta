@@ -893,21 +893,21 @@ export default function KeetaDex() {
           <div className="lg:col-span-5">
             <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur sticky top-24 h-fit">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-lg bg-brand/20 p-2">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="rounded-lg bg-brand/20 p-2 flex-shrink-0">
                       <Wallet className="h-5 w-5 text-sky-400" />
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <CardTitle className="text-lg">Keeta Wallet</CardTitle>
                       <div className="flex items-center gap-2 mt-1">
-                        <code className="text-xs font-mono text-muted-foreground">
+                        <code className="text-xs font-mono text-muted-foreground truncate block max-w-[180px] sm:max-w-none">
                           {wallet.address.slice(0, 12)}...{wallet.address.slice(-8)}
                         </code>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 w-6 p-0"
+                          className="h-6 w-6 p-0 flex-shrink-0"
                           onClick={() => copyToClipboard(wallet.address)}
                         >
                           {copiedAddress ? (
@@ -919,7 +919,7 @@ export default function KeetaDex() {
                       </div>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={disconnectWallet}>
+                  <Button variant="outline" size="sm" onClick={disconnectWallet} className="flex-shrink-0 self-start sm:self-center">
                     Disconnect
                   </Button>
                 </div>
@@ -992,21 +992,21 @@ export default function KeetaDex() {
           <div className="lg:col-span-7">
             <Tabs defaultValue="swap" className="w-full">
               <TabsList className="grid w-full grid-cols-4 mb-6 bg-card/60 border border-border/40">
-                <TabsTrigger value="swap">
-                  <ArrowRightLeft className="mr-2 h-4 w-4" />
-                  Swap
+                <TabsTrigger value="swap" className="text-xs sm:text-sm px-2 sm:px-4">
+                  <ArrowRightLeft className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Swap</span>
                 </TabsTrigger>
-                <TabsTrigger value="pools">
-                  <TrendingUp className="mr-2 h-4 w-4" />
-                  Active Pools
+                <TabsTrigger value="pools" className="text-xs sm:text-sm px-2 sm:px-4">
+                  <TrendingUp className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Active Pools</span>
                 </TabsTrigger>
-                <TabsTrigger value="liquidity">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Liquidity
+                <TabsTrigger value="liquidity" className="text-xs sm:text-sm px-2 sm:px-4">
+                  <Plus className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Add Liquidity</span>
                 </TabsTrigger>
-                <TabsTrigger value="positions">
-                  <Droplets className="mr-2 h-4 w-4" />
-                  My Positions
+                <TabsTrigger value="positions" className="text-xs sm:text-sm px-2 sm:px-4">
+                  <Droplets className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">My Positions</span>
                 </TabsTrigger>
               </TabsList>
 

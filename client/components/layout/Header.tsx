@@ -51,9 +51,9 @@ export function Header() {
             <img
               src="https://cdn.builder.io/api/v1/image/assets%2Fd70091a6f5494e0195b033a72f7e79ae%2Fee3a0a5652aa480f9aa42277503e94b2?format=webp&width=64"
               alt="Silverback logo"
-              className="h-8 w-8 rounded-md object-contain"
+              className="h-8 w-8 rounded-md object-contain flex-shrink-0"
             />
-            <span className="text-base md:text-lg font-extrabold tracking-tight uppercase">
+            <span className="text-sm sm:text-base md:text-lg font-extrabold tracking-tight uppercase whitespace-nowrap">
               Silverback
             </span>
           </Link>
