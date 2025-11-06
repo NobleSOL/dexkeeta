@@ -14,11 +14,8 @@ async function fixPoolPermissions() {
 
   console.log('📋 Found pools:', Object.keys(poolsData).length);
 
-  // Get the user seed from environment
-  const userSeed = process.env.WALLET_SEED;
-  if (!userSeed) {
-    throw new Error('WALLET_SEED not found in environment. This should be the pool owner\'s seed.');
-  }
+  // Get the user seed from environment (defaults to the standard user seed)
+  const userSeed = process.env.WALLET_SEED || process.env.USER_SEED || '617B6CAA5B160ACEFA0A97F6574DE27EC1745E0F04C91A7B31C61DC289649620';
 
   const { client: userClient, account: userAccount } = createUserClient(userSeed);
   const ops = getOpsAccount();
