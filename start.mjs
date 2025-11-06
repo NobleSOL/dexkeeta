@@ -36,6 +36,7 @@ if (existsSync('./server')) {
 
 if (existsSync(serverPath)) {
   console.log(`✅ ${serverPath} exists`);
+  console.log(`Starting server from: ${serverPath}`);
   console.log('\n=== Starting server with tsx ===');
 
   // Start the server
