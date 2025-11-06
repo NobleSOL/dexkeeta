@@ -474,65 +474,33 @@ export default function KeetaDex() {
 
     setCreatingPool(true);
     try {
-      console.log('🏊 Creating new pool with client-side transaction signing...');
+      console.log('🏊 Creating new pool via backend API (creates STORAGE account with AMM logic)...');
 
-      // Execute create pool using client-side implementation
-      const result = await createPoolClient(
-        wallet.seed,
-        newPoolTokenA,
-        newPoolTokenB,
-        liqAmountA,
-        liqAmountB,
-        wallet.accountIndex || 0
-      );
+      // Call backend API to create pool and add initial liquidity
+      // The backend will create a proper STORAGE account with swap functionality
+      const response = await fetch(`${API_BASE}/liquidity/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userSeed: wallet.seed,
+          tokenA: newPoolTokenA,
+          tokenB: newPoolTokenB,
+          amountADesired: liqAmountA,
+          amountBDesired: liqAmountB,
+        }),
+      });
 
-      if (result.success) {
-        // Register pool with backend to grant ops permissions
-        console.log('📝 Registering pool with backend...');
-        try {
-          const registerResponse = await fetch(`${API_BASE}/liquidity/register-pool`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              poolAddress: result.poolAddress,
-              tokenA: newPoolTokenA,
-              tokenB: newPoolTokenB,
-              creatorAddress: wallet.address,
-            }),
-          });
+      const data = await response.json();
 
-          const registerData = await registerResponse.json();
-
-          if (!registerData.success) {
-            console.warn('⚠️ Pool registered but permission setup may have failed:', registerData.error);
-          } else {
-            console.log('✅ Pool registered with ops permissions');
-          }
-        } catch (error) {
-          console.error('❌ Failed to register pool with backend:', error);
-        }
-
-        // Build explorer link
-        const explorerUrl = result.blockHash
-          ? `https://explorer.test.keeta.com/block/${result.blockHash}`
-          : `https://explorer.test.keeta.com/account/${result.poolAddress}`;
+      if (data.success) {
+        console.log('✅ Pool created with AMM logic and initial liquidity added');
 
         toast({
           title: "Pool Created!",
           description: (
             <div className="space-y-1">
-              <div>Added initial liquidity: {liqAmountA} + {liqAmountB}</div>
-              <a
-                href={explorerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sky-400 hover:text-sky-300 underline text-sm flex items-center gap-1"
-              >
-                View Pool on Explorer
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
+              <div>Added initial liquidity: {data.result.amountA} + {data.result.amountB}</div>
+              <div className="text-sm text-gray-400">Pool has STORAGE account with swap functionality</div>
             </div>
           ),
         });
@@ -551,7 +519,7 @@ export default function KeetaDex() {
         await loadPools();
         await fetchPositions();
       } else {
-        throw new Error(result.error || "Failed to create pool");
+        throw new Error(data.error || "Failed to create pool");
       }
     } catch (error: any) {
       toast({
