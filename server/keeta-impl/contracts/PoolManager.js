@@ -90,7 +90,7 @@ export class PoolManager {
 
       // Known pool addresses to check
       const KNOWN_POOL_ADDRESSES = [
-        'keeta_arwmuboqhpkcuqadspvmrznl64e76xufpoxcvjq3yqr2vnoxj3pnzr6hhsz4', // KTA/WAVE
+        'keeta_arwmubo5gxl7vzz3rulmcqyts7webl73zakb5d6hsm2khf3b5xsbil5m3bpek', // KTA/WAVE (updated)
         'keeta_athjolef2zpnj6pimky2sbwbe6cmtdxakgixsveuck7fd7ql2vrf6mxkh4gy4', // KTA/RIDE
       ];
 
@@ -106,7 +106,7 @@ export class PoolManager {
 
           // Try to get balances to identify tokens
           const poolAccount = accountFromAddress(poolAddress);
-          const balances = await client.getAllBalances(poolAccount);
+          const balances = await client.allBalances({ account: poolAccount });
 
           if (!balances || balances.length < 2) {
             console.log(`  Pool ${poolAddress.slice(-8)} has insufficient tokens`);
@@ -115,7 +115,13 @@ export class PoolManager {
 
           // Extract token addresses from balances
           const tokenAddresses = balances
-            .map(b => b.token?.publicKeyString?.get?.())
+            .map(b => {
+              // Try different ways to get the token address
+              const token = b.token?.publicKeyString?.get?.() ||
+                           b.token?.publicKeyString?.toString() ||
+                           b.token?.toString();
+              return token;
+            })
             .filter(addr => addr && addr.startsWith('keeta_'));
 
           if (tokenAddresses.length < 2) {
