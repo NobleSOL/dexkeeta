@@ -247,22 +247,94 @@ Pool STORAGE Account:
 
 ## Current Limitations
 
-### 1. Backend Dependency
+### 1. **Centralized Liquidity Provisioning** ⚠️ MOST IMPORTANT
+
+**Current State:**
+- All pools are created and funded by the DEX operator (via Treasury account)
+- Users CANNOT add liquidity to existing pools
+- Users CANNOT create their own pools
+- All liquidity is centralized under the Treasury account's control
+
+**Why This Limitation Exists:**
+
+Keeta blockchain currently lacks key features needed for permissionless liquidity:
+
+1. **No Fungible LP Tokens**
+   - Keeta has no way to mint/transfer ownership shares
+   - Cannot represent "% of pool" as a tradable token
+   - No standard for fungible token creation (like ERC-20)
+
+2. **No Shared Pool Ownership**
+   - STORAGE accounts are controlled by a single private key
+   - Cannot have "multi-sig" or "shared ownership" of pool account
+   - No way to split control between multiple liquidity providers
+
+3. **No On-Chain LP Share Tracking**
+   - Cannot store "Alice owns 30%, Bob owns 70%" on-chain
+   - No smart contracts to manage ownership ledger
+   - Off-chain tracking is centralized and not verifiable
+
+**What This Means:**
+
+✅ **Swaps are permissionless:** Any user can trade tokens through existing pools
+❌ **Liquidity is centralized:** Only DEX operator can provide liquidity
+❌ **No LP rewards for users:** Users cannot earn trading fees
+❌ **Limited pool diversity:** Only operator-created pairs available
+
+**Security Implications:**
+
+⚠️ **Users must trust the DEX operator:**
+- Operator controls all pool liquidity
+- Operator could theoretically drain pools
+- No programmatic guarantee operator will maintain pools
+- Single point of failure if operator's key is compromised
+
+✅ **But users maintain swap custody:**
+- Users still control their own tokens during swaps
+- Swaps are atomic and trustless (once pool exists)
+- Operator cannot steal tokens during swap transactions
+
+**Path to Decentralization:**
+
+This is a **temporary limitation** that requires Keeta protocol upgrades:
+
+**Short Term (Backend Solution):**
+- Store off-chain LP ledger (database)
+- Allow users to "deposit" liquidity (we hold it)
+- Distribute fee rewards pro-rata based on shares
+- **Risk:** Still requires trusting DEX operator
+
+**Medium Term (Requires Keeta Protocol Features):**
+Need Keeta team to add:
+- Fungible token standard (like ERC-20)
+- Token minting/burning operations
+- Shared account control primitives
+- Or, on-chain metadata for LP tracking
+
+**Long Term (Requires Smart Contracts):**
+When Keeta adds smart contract support:
+- Mint LP tokens representing pool shares
+- On-chain LP token ownership ledger
+- Automatic fee distribution to LP token holders
+- Fully permissionless pool creation
+- Full composability (LP tokens as collateral, etc.)
+
+### 2. Backend Dependency
 - **Issue:** DEX requires backend server to be online
 - **Impact:** If server goes down, no swaps possible
 - **Mitigation:** Planning production deployment with monitoring
 
-### 2. Centralized Pool Registry
+### 3. Centralized Pool Registry
 - **Issue:** Only backend knows which pools exist
 - **Impact:** Users must trust pool list is complete/accurate
 - **Future:** Store pool metadata on-chain in account info
 
-### 3. LP Token Tracking
+### 4. LP Token Tracking
 - **Issue:** LP shares stored in JSON files, not on-chain
 - **Impact:** If files lost, LP positions could be disputed
 - **Mitigation:** Regular backups, future DB migration
 
-### 4. No Smart Contract Guarantees
+### 5. No Smart Contract Guarantees
 - **Issue:** AMM logic not enforced by blockchain
 - **Impact:** Backend could theoretically change formulas
 - **Future:** When Keeta adds smart contracts, migrate to on-chain logic
@@ -383,7 +455,11 @@ history.forEach(({ voteStaple }) => {
 ## Frequently Asked Questions
 
 ### Q: Is this really "decentralized"?
-**A:** Partially. Token custody and execution are decentralized (Keeta blockchain), but pool logic and state tracking are centralized (backend server). This is a **hybrid model** - more decentralized than a CEX, less than an EVM DEX.
+**A:** **Swaps are permissionless, but liquidity is centralized.**
+
+Any user can swap tokens through existing pools without permission (decentralized trading), but only the DEX operator can provide liquidity (centralized liquidity provisioning).
+
+This is because Keeta lacks the protocol features needed for decentralized liquidity (fungible LP tokens, shared ownership, etc.). Think of it as: **Swaps work like Uniswap, but liquidity works like a market maker.**
 
 ### Q: Can the backend steal my tokens?
 **A:** No. The backend cannot sign transactions on your behalf. Tokens only move when YOU sign with your private key. The backend orchestrates transactions but cannot execute them without your approval.

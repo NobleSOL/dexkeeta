@@ -135,6 +135,18 @@ export default function KeetaDex() {
     }
   }
 
+  // Set swap amount to a percentage of user's balance
+  function setSwapPercentage(percent: number) {
+    if (!wallet || !swapTokenIn) return;
+
+    const token = wallet.tokens.find(t => t.address === swapTokenIn);
+    if (!token) return;
+
+    const balance = parseFloat(token.balanceFormatted);
+    const amount = (balance * percent / 100).toFixed(token.decimals);
+    setSwapAmount(amount);
+  }
+
   // Sort and filter tokens - KTA always first, then show top 5 (or all if expanded)
   const sortedTokens = wallet?.tokens.sort((a, b) => {
     if (a.symbol === "KTA") return -1;
@@ -162,6 +174,20 @@ export default function KeetaDex() {
       fetchPositions().catch(err => console.error('Error fetching positions:', err));
     }
   }, [wallet?.address]);
+
+  // Auto-refresh balances every 30 seconds while wallet is connected
+  useEffect(() => {
+    if (!wallet?.address) return;
+
+    // Set up interval to refresh balances
+    const intervalId = setInterval(() => {
+      console.log('⏰ Auto-refreshing balances...');
+      refreshBalances().catch(err => console.error('Auto-refresh failed:', err));
+    }, 30000); // 30 seconds
+
+    // Clean up interval on unmount or when wallet disconnects
+    return () => clearInterval(intervalId);
+  }, [wallet?.address, wallet?.seed, wallet?.accountIndex]);
 
   // Debug: Monitor newSeedBackup state changes
   useEffect(() => {
@@ -1098,6 +1124,22 @@ export default function KeetaDex() {
                       className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60"
                     />
                   </div>
+
+                  {/* Percentage buttons */}
+                  {swapTokenIn && (
+                    <div className="flex gap-2 mt-2">
+                      {[25, 50, 75, 100].map((percent) => (
+                        <button
+                          key={percent}
+                          type="button"
+                          onClick={() => setSwapPercentage(percent)}
+                          className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-border/60 bg-secondary/40 hover:bg-secondary/80 transition-colors"
+                        >
+                          {percent}%
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Swap Arrow - Vertical with toggle */}
