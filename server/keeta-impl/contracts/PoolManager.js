@@ -36,7 +36,7 @@ export class PoolManager {
     try {
       const data = await fs.readFile(this.persistencePath, 'utf8');
       const poolData = JSON.parse(data);
-      
+
       for (const [pairKey, poolInfo] of Object.entries(poolData)) {
         this.poolAddresses.set(pairKey, poolInfo.address);
 
@@ -47,10 +47,12 @@ export class PoolManager {
           poolInfo.tokenB,
           poolInfo.lpTokenAddress || null
         );
+        pool.creator = poolInfo.creator || null; // Set creator/owner
         await pool.initialize();
         this.pools.set(pairKey, pool);
 
-        console.log(`📦 Loaded pool: ${pairKey} at ${poolInfo.address}`);
+        console.log(`📦 Loaded pool: ${pairKey} at ${poolInfo.address}`)
+;
       }
     } catch (err) {
       if (err.code !== 'ENOENT') {
@@ -71,6 +73,7 @@ export class PoolManager {
         tokenA: pool.tokenA,
         tokenB: pool.tokenB,
         lpTokenAddress: pool.lpTokenAddress,
+        creator: pool.creator || null, // Track pool creator/owner
       };
     }
 
@@ -247,6 +250,7 @@ export class PoolManager {
 
     // Create and initialize pool instance
     const pool = new Pool(poolAddress, tokenA, tokenB);
+    pool.creator = creatorAddress; // Set creator/owner
     await pool.initialize();
 
     // Register pool
@@ -403,6 +407,7 @@ export class PoolManager {
 
   /**
    * Get user's LP position across all pools
+   * SIMPLE ARCHITECTURE: If user is pool creator, they own all liquidity
    */
   async getUserPositions(userAddress) {
     const positions = [];
@@ -411,32 +416,51 @@ export class PoolManager {
 
     for (const pool of this.pools.values()) {
       try {
-        const position = await pool.getUserLPBalance(userAddress);
+        // Check if user is the creator/owner of this pool (simple architecture)
+        if (pool.creator && pool.creator.toLowerCase() === userAddress.toLowerCase()) {
+          // User owns this pool - show entire pool liquidity as their position
+          console.log(`  Pool ${pool.poolAddress.slice(-8)}: USER IS OWNER - showing full pool liquidity`);
 
-        console.log(`  Pool ${pool.poolAddress.slice(-8)}: lpBalance=${position.lpBalance}, shares=${position.sharePercent}%`);
-
-        // Check if position exists and has lpBalance
-        if (position && position.lpBalance && BigInt(position.lpBalance) > 0n) {
-          // Fetch token symbols
           const symbolA = await pool.getTokenSymbol(pool.tokenA);
           const symbolB = await pool.getTokenSymbol(pool.tokenB);
 
           positions.push({
             poolAddress: pool.poolAddress,
-            lpStorageAddress: position.lpStorageAddress, // User's LP storage account
             tokenA: pool.tokenA,
             tokenB: pool.tokenB,
             symbolA,
             symbolB,
-            liquidity: position.lpBalance, // Frontend expects 'liquidity' not 'lpBalance'
-            sharePercent: position.sharePercent,
-            amountA: position.amountAHuman, // Use human-readable format
-            amountB: position.amountBHuman, // Use human-readable format
-            timestamp: Date.now(), // Add timestamp for frontend display
+            liquidity: pool.reserveA.toString(), // Use reserveA as "liquidity" metric
+            sharePercent: 100, // Owner has 100% of pool
+            amountA: pool.reserveAHuman, // Full pool reserve A
+            amountB: pool.reserveBHuman, // Full pool reserve B
+            timestamp: Date.now(),
           });
+        } else {
+          // Try complex architecture (LP storage accounts) - fallback
+          const position = await pool.getUserLPBalance(userAddress);
+
+          if (position && position.lpBalance && BigInt(position.lpBalance) > 0n) {
+            const symbolA = await pool.getTokenSymbol(pool.tokenA);
+            const symbolB = await pool.getTokenSymbol(pool.tokenB);
+
+            positions.push({
+              poolAddress: pool.poolAddress,
+              lpStorageAddress: position.lpStorageAddress,
+              tokenA: pool.tokenA,
+              tokenB: pool.tokenB,
+              symbolA,
+              symbolB,
+              liquidity: position.lpBalance,
+              sharePercent: position.sharePercent,
+              amountA: position.amountAHuman,
+              amountB: position.amountBHuman,
+              timestamp: Date.now(),
+            });
+          }
         }
       } catch (error) {
-        console.error(`Error getting LP balance for pool ${pool.poolAddress}:`, error.message);
+        console.error(`Error getting position for pool ${pool.poolAddress}:`, error.message);
         // Continue to next pool instead of failing completely
       }
     }

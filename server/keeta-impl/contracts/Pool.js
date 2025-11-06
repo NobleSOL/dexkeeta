@@ -36,6 +36,7 @@ export class Pool {
     this.decimalsB = null;
     this.reserveA = 0n; // Aggregated from all LP accounts
     this.reserveB = 0n; // Aggregated from all LP accounts
+    this.creator = null; // Pool creator/owner (for simple architecture)
 
     // Multi-LP tracking
     this.lpAccounts = new Map(); // userAddress => { lpStorageAddress, shares, amountA, amountB }
