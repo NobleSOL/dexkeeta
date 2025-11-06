@@ -1,0 +1,12 @@
+{
+  "poolAddress": "keeta_atulpbgzwrphasyensi234jrpnyefv4fqoaovrjrex4cjw6rbiibq6panevsg",
+  "totalShares": "3162276660",
+  "positions": {
+    "keeta_aabtozgfunwwvwdztv54y6l5x57q2g3254shgp27zjltr2xz3pyo7q4tjtmsamy": {
+      "lpStorageAddress": null,
+      "shares": "3162276660",
+      "amountA": "1000000000",
+      "amountB": "10000000000"
+    }
+  }
+}

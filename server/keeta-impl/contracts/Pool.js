@@ -208,30 +208,36 @@ export class Pool {
     console.log(`   Fee: ${feeAmount}, After fee: ${amountInAfterFee}`);
 
     // ============================================================================
-    // STEP 1: User creates swap request
+    // STEP 1: Send fee to treasury (separate transaction)
     // ============================================================================
-    console.log('📝 Step 1: User creates swap request...');
+    if (feeAmount > 0n) {
+      console.log('📝 Step 1a: Sending fee to treasury...');
+      const feeBuilder = userClient.initBuilder();
+      feeBuilder.send(treasuryAccount, feeAmount, tokenInAccount);
+      await userClient.publishBuilder(feeBuilder);
+      console.log(`✅ Fee sent: ${feeAmount} atomic units`);
+    }
 
-    // User proposes swap: "I give amountInAfterFee of tokenIn, I want amountOut of tokenOut"
+    // ============================================================================
+    // STEP 2: User creates swap request
+    // ============================================================================
+    console.log('📝 Step 2: User creates swap request...');
+
+    // Swap request structure:
+    // from: What I'm giving (user sends tokenIn to pool)
+    // to: What I'm receiving (user receives tokenOut from pool)
     const swapRequest = {
       from: {
-        account: userAccount,
-        token: tokenInAccount,
-        amount: amountInAfterFee,
+        account: userAccount,        // I (user) am sending...
+        token: tokenInAccount,        // ...tokenIn...
+        amount: amountInAfterFee,     // ...this amount
       },
       to: {
-        account: poolAccount,
-        token: tokenOutAccount,
-        amount: amountOut,
+        account: userAccount,         // I (user) want to receive...
+        token: tokenOutAccount,       // ...tokenOut...
+        amount: amountOut,            // ...this amount
       },
     };
-
-    // Also send fee to treasury in same transaction
-    const userBuilder = userClient.initBuilder();
-    if (feeAmount > 0n) {
-      userBuilder.send(treasuryAccount, feeAmount, tokenInAccount);
-      console.log(`   💰 Fee to treasury: ${feeAmount}`);
-    }
 
     console.log('🚀 Publishing swap request...');
     const requestBlock = await userClient.createSwapRequest(swapRequest);
