@@ -306,16 +306,12 @@ export async function createStorageAccount(name, description, isPool = false) {
   const treasuryAddress = treasury.publicKeyString.get();
   const sameAccount = opsAddress === treasuryAddress;
 
-  // For pools, we need to add SEND_ON_BEHALF to default permissions so anyone can swap
+  // Default permissions for storage accounts (base flags only)
   const basePermissions = [
     'ACCESS',
     'STORAGE_CAN_HOLD',
     'STORAGE_DEPOSIT',
   ];
-
-  if (isPool) {
-    basePermissions.push('SEND_ON_BEHALF');
-  }
 
   if (sameAccount) {
     // When ops and treasury are same: use defaults for tokens, grant OWNER to ops
@@ -329,13 +325,13 @@ export async function createStorageAccount(name, description, isPool = false) {
       { account: storageAccount }
     );
 
-    // Grant OWNER to ops account (overrides default for this account)
+    // Grant OWNER and SEND_ON_BEHALF to ops account
+    // For pools, SEND_ON_BEHALF allows ops to route swaps through the pool
+    const opsPermissions = ['OWNER', 'SEND_ON_BEHALF'];
+
     builder.updatePermissions(
       ops,
-      new KeetaNet.lib.Permissions([
-        'OWNER',
-        'SEND_ON_BEHALF',
-      ]),
+      new KeetaNet.lib.Permissions(opsPermissions),
       undefined,
       undefined,
       { account: storageAccount }
