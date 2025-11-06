@@ -702,9 +702,11 @@ export async function createPool(
     const userAccount = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
 
     // Generate pool account from identifier
-    // In production, this would derive from a standard seed + identifier
-    const poolSeed = new TextEncoder().encode(poolIdentifier);
-    const poolAccount = KeetaSDK.lib.Account.fromSeed(poolSeed, 0);
+    // Hash the pool identifier to get exactly 32 bytes for the seed
+    const poolIdentifierBytes = new TextEncoder().encode(poolIdentifier);
+    const poolSeed = await crypto.subtle.digest('SHA-256', poolIdentifierBytes);
+    const poolSeedArray = new Uint8Array(poolSeed);
+    const poolAccount = KeetaSDK.lib.Account.fromSeed(poolSeedArray, 0);
     const poolAddress = poolAccount.publicKeyString.get();
 
     console.log(`📍 Pool address: ${poolAddress}`);
