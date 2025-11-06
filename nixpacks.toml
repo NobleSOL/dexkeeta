@@ -9,7 +9,10 @@ cmds = [
   'pwd',
   'ls -la',
   'ls -la server/ || echo "server dir not found"',
-  'pnpm build:client'
+  'pnpm build:client',
+  'mkdir -p dist/server-built',
+  'cp -r server dist/server-built/',
+  'ls -la dist/server-built/'
 ]
 
 [start]
