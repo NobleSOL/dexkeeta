@@ -271,17 +271,28 @@ export async function fetchPools() {
   try {
     // Fetch pools from backend API
     const API_BASE = import.meta.env.VITE_KEETA_API_BASE || `${window.location.origin}/api`;
-    const response = await fetch(`${API_BASE}/pools`);
+    console.log('🔍 fetchPools - API_BASE:', API_BASE);
+    console.log('🔍 fetchPools - window.location.origin:', window.location.origin);
+    console.log('🔍 fetchPools - VITE_KEETA_API_BASE:', import.meta.env.VITE_KEETA_API_BASE);
+
+    const fullUrl = `${API_BASE}/pools`;
+    console.log('🔍 fetchPools - Fetching from:', fullUrl);
+
+    const response = await fetch(fullUrl);
+    console.log('🔍 fetchPools - Response status:', response.status, response.statusText);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch pools: ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('🔍 fetchPools - Response data:', data);
 
     if (!data.success || !data.pools) {
       throw new Error('Invalid pools response from API');
     }
+
+    console.log(`✅ fetchPools - Successfully fetched ${data.pools.length} pools`);
 
     // The backend already provides all the pool data we need
     return data.pools.map((pool: any) => ({
@@ -301,7 +312,7 @@ export async function fetchPools() {
       priceBtoA: pool.priceBtoA,
     }));
   } catch (error) {
-    console.error('Error fetching pools:', error);
+    console.error('❌ Error fetching pools:', error);
     return [];
   }
 }
