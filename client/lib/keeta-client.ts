@@ -15,11 +15,22 @@ export function createKeetaClient() {
 
 /**
  * Convert hex string to Uint8Array (browser-compatible)
+ * Also handles validation to ensure we get exactly 32 bytes
  */
 function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  // Remove any whitespace
+  const cleanHex = hex.trim();
+
+  // Check if it's a valid hex string (64 characters = 32 bytes)
+  if (!/^[0-9a-fA-F]{64}$/.test(cleanHex)) {
+    console.error('❌ Invalid seed format. Expected 64 hex characters, got:', cleanHex.length, 'characters');
+    console.error('Seed preview:', cleanHex.substring(0, 20) + '...');
+    throw new Error(`Invalid seed: must be 64 hex characters (32 bytes). Got ${cleanHex.length} characters.`);
+  }
+
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 64; i += 2) {
+    bytes[i / 2] = parseInt(cleanHex.substr(i, 2), 16);
   }
   return bytes;
 }
