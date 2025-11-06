@@ -1,0 +1,13 @@
+[
+  {
+    "type": "SWAP_FORWARD",
+    "timestamp": 1762453599826,
+    "user": "keeta_aabtozgfunwwvwdztv54y6l5x57q2g3254shgp27zjltr2xz3pyo7q4tjtmsamy",
+    "pool": "keeta_araduwdluy677hwopdaernyp7r6yeoxliamypcn5w3aooz32dzyvkl6dwsca4",
+    "tokenIn": "keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52",
+    "tokenOut": "keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo",
+    "amountIn": "10000000",
+    "amountOut": "98715803",
+    "priceImpact": "0.9871584754262863"
+  }
+]

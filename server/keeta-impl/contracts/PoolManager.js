@@ -220,9 +220,14 @@ export class PoolManager {
   /**
    * Create a new pool for a token pair (permissionless)
    *
+   * CENTRALIZED LIQUIDITY MODEL:
+   * - OPS owns all pools (can publish TX2 to complete swaps)
+   * - Any user can trade (TX1 only requires having tokens)
+   * - Creator tracked for informational purposes
+   *
    * @param {string} tokenA - Token A address
    * @param {string} tokenB - Token B address
-   * @param {string} creatorAddress - Address of the pool creator who will own the pool
+   * @param {string} creatorAddress - Address of the pool creator (for tracking only)
    * @returns {Promise<Pool>}
    */
   async createPool(tokenA, tokenB, creatorAddress) {
@@ -237,7 +242,7 @@ export class PoolManager {
 
     // Create storage account for the pool
     // Use pool letter to keep name short (max 50 chars, A-Z_ only, no numbers)
-    // Pass isPool=true to enable SEND_ON_BEHALF in default permissions (permissionless swaps)
+    // OPS will remain the owner (centralized liquidity model)
     const poolIndex = this.pools.size;
     const poolLetter = String.fromCharCode(65 + poolIndex); // A, B, C, etc.
     const poolAddress = await createStorageAccount(
@@ -247,13 +252,15 @@ export class PoolManager {
     );
 
     console.log(`✅ Pool created at ${poolAddress}`);
+    console.log(`   OPS retains ownership (centralized liquidity model)`);
+    console.log(`   Creator: ${creatorAddress} (tracked for informational purposes)`);
 
-    // Transfer ownership to creator, Ops keeps SEND_ON_BEHALF for routing
-    await this.transferPoolOwnership(poolAddress, creatorAddress, tokenA, tokenB);
+    // REMOVED: transferPoolOwnership() - OPS keeps ownership for two-transaction swaps
+    // This allows OPS to publish TX2 using { account: poolAccount }
 
     // Create and initialize pool instance
     const pool = new Pool(poolAddress, tokenA, tokenB);
-    pool.creator = creatorAddress; // Set creator/owner
+    pool.creator = creatorAddress; // Track who created the pool
     await pool.initialize();
 
     // Register pool
