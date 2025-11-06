@@ -285,26 +285,37 @@ export async function createLPStorageAccount(userAddress, poolIdentifier) {
   return storageAddress;
 }
 
-export async function createStorageAccount(name, description) {
+export async function createStorageAccount(name, description, isPool = false) {
   const client = await getOpsClient();
   const ops = getOpsAccount();
   const treasury = getTreasuryAccount();
-  
+
   const builder = client.initBuilder();
-  
+
   // Generate new storage account
   const pending = builder.generateIdentifier(
     KeetaNet.lib.Account.AccountKeyAlgorithm.STORAGE
   );
   await builder.computeBlocks();
-  
+
   const storageAccount = pending.account;
   const marketId = storageAccount.publicKeyString.toString();
-  
+
   // Check if ops and treasury are the same account
   const opsAddress = ops.publicKeyString.get();
   const treasuryAddress = treasury.publicKeyString.get();
   const sameAccount = opsAddress === treasuryAddress;
+
+  // For pools, we need to add SEND_ON_BEHALF to default permissions so anyone can swap
+  const basePermissions = [
+    'ACCESS',
+    'STORAGE_CAN_HOLD',
+    'STORAGE_DEPOSIT',
+  ];
+
+  if (isPool) {
+    basePermissions.push('SEND_ON_BEHALF');
+  }
 
   if (sameAccount) {
     // When ops and treasury are same: use defaults for tokens, grant OWNER to ops
@@ -313,11 +324,7 @@ export async function createStorageAccount(name, description) {
         name,
         description,
         metadata: '',
-        defaultPermission: new KeetaNet.lib.Permissions([
-          'ACCESS',
-          'STORAGE_CAN_HOLD',
-          'STORAGE_DEPOSIT',
-        ]),
+        defaultPermission: new KeetaNet.lib.Permissions(basePermissions),
       },
       { account: storageAccount }
     );
@@ -340,11 +347,7 @@ export async function createStorageAccount(name, description) {
         name,
         description,
         metadata: '',
-        defaultPermission: new KeetaNet.lib.Permissions([
-          'ACCESS',
-          'STORAGE_CAN_HOLD',
-          'STORAGE_DEPOSIT',
-        ]),
+        defaultPermission: new KeetaNet.lib.Permissions(basePermissions),
       },
       { account: storageAccount }
     );

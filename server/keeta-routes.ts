@@ -8,6 +8,7 @@ import liquidityRouter from './keeta-impl/routes/liquidity.js';
 import poolsRouter from './keeta-impl/routes/pools.js';
 import walletRouter from './keeta-impl/routes/wallet.js';
 import transactionsRouter from './keeta-impl/routes/transactions.js';
+import adminRouter from './keeta-impl/routes/admin.js';
 
 const router = Router();
 
@@ -17,5 +18,6 @@ router.use('/api/liquidity', liquidityRouter);
 router.use('/api/pools', poolsRouter);
 router.use('/api/wallet', walletRouter);
 router.use('/api/transactions', transactionsRouter);
+router.use('/api/admin', adminRouter);
 
 export default router;

@@ -236,11 +236,13 @@ export class PoolManager {
 
     // Create storage account for the pool
     // Use pool letter to keep name short (max 50 chars, A-Z_ only, no numbers)
+    // Pass isPool=true to enable SEND_ON_BEHALF in default permissions (permissionless swaps)
     const poolIndex = this.pools.size;
     const poolLetter = String.fromCharCode(65 + poolIndex); // A, B, C, etc.
     const poolAddress = await createStorageAccount(
       `SILVERBACK_POOL_${poolLetter}`,
-      `Liquidity pool for ${tokenA.slice(0, 12)}... / ${tokenB.slice(0, 12)}...`
+      `Liquidity pool for ${tokenA.slice(0, 12)}... / ${tokenB.slice(0, 12)}...`,
+      true // isPool flag - enables SEND_ON_BEHALF for permissionless swaps
     );
 
     console.log(`✅ Pool created at ${poolAddress}`);

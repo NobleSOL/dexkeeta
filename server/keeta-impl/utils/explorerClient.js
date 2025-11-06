@@ -11,6 +11,34 @@ export class ExplorerClient {
   }
 
   /**
+   * Fetch account information from the Keeta SDK client
+   * Note: We use the SDK client, not HTTP API, for account queries
+   */
+  async fetchAccount(accountAddress) {
+    try {
+      const client = await getOpsClient();
+      const { accountFromAddress } = await import('./client.js');
+
+      const account = accountFromAddress(accountAddress);
+      const balance = await client.getBalance(account);
+
+      // Get account info using SDK
+      // For now, return basic structure - we'll need to query balances per token
+      return {
+        address: accountAddress,
+        balances: {}, // Would need to query each token individually
+        createdAccounts: [], // Not easily available from SDK
+        accountType: 'ACCOUNT', // Default, would need metadata query
+        name: null,
+        description: null,
+      };
+    } catch (err) {
+      console.error(`Error fetching account ${accountAddress}:`, err.message);
+      return null;
+    }
+  }
+
+  /**
    * Fetch transactions for an account
    */
   async getAccountTransactions(accountAddress, limit = 50) {
