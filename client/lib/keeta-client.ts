@@ -712,9 +712,17 @@ export async function createPool(
     console.log(`📍 Pool address: ${poolAddress}`);
     console.log(`🔑 Pool identifier: ${poolIdentifier}`);
 
-    // Convert amounts to atomic units (assuming 9 decimals)
-    const atomicAmountA = BigInt(Math.floor(parseFloat(amountA) * 1e9));
-    const atomicAmountB = BigInt(Math.floor(parseFloat(amountB) * 1e9));
+    // Fetch token decimals
+    console.log('🔍 Fetching token decimals...');
+    const metadataA = await fetchTokenMetadata(tokenA);
+    const metadataB = await fetchTokenMetadata(tokenB);
+    const decimalsA = metadataA.decimals;
+    const decimalsB = metadataB.decimals;
+    console.log(`Token A decimals: ${decimalsA}, Token B decimals: ${decimalsB}`);
+
+    // Convert amounts to atomic units using actual decimals
+    const atomicAmountA = BigInt(Math.floor(parseFloat(amountA) * Math.pow(10, decimalsA)));
+    const atomicAmountB = BigInt(Math.floor(parseFloat(amountB) * Math.pow(10, decimalsB)));
 
     // Build transaction to add initial liquidity
     const builder = client.initBuilder();
