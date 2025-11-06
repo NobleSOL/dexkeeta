@@ -148,14 +148,17 @@ export class Pool {
   }
 
   /**
-   * Execute a swap
+   * Execute a swap using TWO-TRANSACTION architecture
+   *
+   * TX1 (User publishes): User sends input tokens + fee
+   * TX2 (OPS publishes): OPS pulls output tokens from pool and sends to user
    *
    * @param {Object} userClient - User's KeetaNet client (from createUserClient)
    * @param {string} userAddress - User's account address
    * @param {string} tokenIn - Input token address
    * @param {bigint} amountIn - Amount of input token (atomic)
    * @param {bigint} minAmountOut - Minimum acceptable output amount (slippage protection)
-   * @returns {Promise<{ amountOut: bigint, feeAmount: bigint, priceImpact: number }>}
+   * @returns {Promise<{ amountOut: bigint, feeAmount: bigint, priceImpact: number, tx1Hash: string, tx2Hash: string }>}
    */
   async swap(userClient, userAddress, tokenIn, amountIn, minAmountOut = 0n) {
     await this.updateReserves();
@@ -182,89 +185,70 @@ export class Pool {
       );
     }
 
-    // Build transaction using user's client so they can send their tokens
+    // TWO-TRANSACTION ARCHITECTURE:
+    // TX1: User sends input tokens to pool + fee to treasury
+    // TX2: OPS pulls output tokens from pool and sends to user
+    //
+    // This avoids the SEND_ON_BEHALF permission issue where users would need
+    // permission to pull from pool. Instead, users only send (which they can do),
+    // and OPS uses its SEND_ON_BEHALF permission to complete the swap.
+
     const treasury = getTreasuryAccount();
-    const builder = userClient.initBuilder();
+    const { getOpsClient, getOpsAccount } = await import('../utils/client.js');
 
     const tokenInAccount = accountFromAddress(tokenIn);
     const tokenOutAccount = accountFromAddress(tokenOut);
     const userAccount = accountFromAddress(userAddress);
+    const poolAccount = accountFromAddress(this.poolAddress);
 
-    // Calculate input amount after fee (this will be distributed to LPs)
     const amountInAfterFee = amountIn - feeAmount;
 
-    console.log(`🔄 Executing swap: ${amountIn} ${tokenIn.slice(0, 12)}... → ${amountOut} ${tokenOut.slice(0, 12)}...`);
+    console.log(`🔄 TWO-TX SWAP: ${amountIn} ${tokenIn.slice(0, 12)}... → ${amountOut} ${tokenOut.slice(0, 12)}...`);
     console.log(`   User: ${userAddress.slice(0, 12)}...`);
     console.log(`   Fee: ${feeAmount}, After fee: ${amountInAfterFee}`);
 
-    // CRITICAL FIX: Direct user→LP and LP→user transfers
-    // In Keeta's atomic transactions, OPS cannot hold tokens as an intermediary.
-    // All transfers must be direct: user sends to LPs, LPs send to user.
+    // ============================================================================
+    // TRANSACTION 1: User sends input tokens
+    // ============================================================================
+    console.log('📝 TX1: User sends input tokens...');
+    const userBuilder = userClient.initBuilder();
 
-    // 1. User sends fee directly to treasury
+    // User sends fee to treasury
     if (feeAmount > 0n) {
-      builder.send(treasury, feeAmount, tokenInAccount);
-      console.log(`   ✅ Step 1: User sends ${feeAmount} fee to treasury`);
+      userBuilder.send(treasury, feeAmount, tokenInAccount);
+      console.log(`   ✅ User → Treasury (fee: ${feeAmount})`);
     }
 
-    // 2. Route swap directly through the pool account (pooled liquidity)
-    // User sends input token DIRECTLY to pool account
-    // OPS uses SEND_ON_BEHALF to pull output token from pool and send to user
-    console.log(`   📊 Routing through pooled liquidity...`);
+    // User sends input token to pool
+    userBuilder.send(poolAccount, amountInAfterFee, tokenInAccount);
+    console.log(`   ✅ User → Pool (input: ${amountInAfterFee})`);
 
-    const poolAccount = accountFromAddress(this.poolAddress);
+    console.log('🚀 Publishing TX1...');
+    const tx1Result = await userClient.publishBuilder(userBuilder);
+    const tx1Hash = tx1Result?.blockHash || tx1Result?.hash || 'unknown';
+    console.log(`✅ TX1 completed: ${tx1Hash}`);
 
-    // User sends input token DIRECTLY to pool (no intermediary)
-    builder.send(poolAccount, amountInAfterFee, tokenInAccount);
+    // Wait 2 seconds between transactions to avoid network timing issues
+    console.log('⏳ Waiting 2 seconds before TX2...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // OPS uses SEND_ON_BEHALF to pull output token from pool and send to user
-    builder.send(userAccount, amountOut, tokenOutAccount, undefined, {
+    // ============================================================================
+    // TRANSACTION 2: OPS sends output tokens from pool to user
+    // ============================================================================
+    console.log('📝 TX2: OPS sends output tokens from pool...');
+    const opsClient = await getOpsClient();
+    const opsBuilder = opsClient.initBuilder();
+
+    // OPS uses SEND_ON_BEHALF to pull from pool and send to user
+    opsBuilder.send(userAccount, amountOut, tokenOutAccount, undefined, {
       account: poolAccount,
     });
+    console.log(`   ✅ Pool → User (output: ${amountOut})`);
 
-    let totalAmountOutPulled = amountOut;
-
-    // Handle rounding dust: if we didn't pull enough due to rounding, pull from first LP
-    if (totalAmountOutPulled < amountOut) {
-      const dust = amountOut - totalAmountOutPulled;
-      const firstLP = this.lpAccounts.values().next().value;
-      if (firstLP) {
-        // Check if first LP has enough for the dust
-        const lpAvailableOut = isAtoB ? firstLP.amountB : firstLP.amountA;
-        const safeDust = dust > lpAvailableOut ? lpAvailableOut : dust;
-
-        if (safeDust > 0n) {
-          const lpStorageAccount = accountFromAddress(firstLP.lpStorageAddress);
-          builder.send(userAccount, safeDust, tokenOutAccount, undefined, {
-            account: lpStorageAccount,
-          });
-
-          // Update first LP tracking
-          if (isAtoB) {
-            firstLP.amountB -= safeDust;
-          } else {
-            firstLP.amountA -= safeDust;
-          }
-
-          totalAmountOutPulled += safeDust;
-        }
-      }
-    }
-
-    // Save updated LP positions
-    await this.saveLiquidityPositions();
-
-    // Execute transaction and get block hashes
-    const txResult = await userClient.publishBuilder(builder);
-
-    // Extract block hash from the second block (index 1)
-    // The first block is the receive, the second block is the send/swap
-    let blockHash = null;
-    if (builder.blocks && builder.blocks.length > 1) {
-      const block = builder.blocks[1]; // Get second block
-      // Convert BlockHash object to string
-      blockHash = block.hash ? block.hash.toString('hex').toUpperCase() : null;
-    }
+    console.log('🚀 Publishing TX2...');
+    const tx2Result = await opsClient.publishBuilder(opsBuilder);
+    const tx2Hash = tx2Result?.blockHash || tx2Result?.hash || 'unknown';
+    console.log(`✅ TX2 completed: ${tx2Hash}`);
 
     // Update reserves after swap
     await this.updateReserves();
@@ -278,7 +262,9 @@ export class Pool {
       priceImpact,
       newReserveA: this.reserveA,
       newReserveB: this.reserveB,
-      blockHash,
+      tx1Hash,
+      tx2Hash,
+      blockHash: tx2Hash, // For backwards compatibility
     };
   }
 
