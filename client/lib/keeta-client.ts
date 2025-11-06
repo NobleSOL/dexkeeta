@@ -269,46 +269,37 @@ async function fetchPoolReserves(poolAddress: string, tokenA: string, tokenB: st
  */
 export async function fetchPools() {
   try {
-    // Hardcoded known pools (pool addresses are deterministic)
-    const knownPools = [
-      {
-        poolAddress: 'keeta_arwmubo5gxl7vzz3rulmcqyts7webl73zakb5d6hsm2khf3b5xsbil5m3bpek',
-        tokenA: 'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52', // KTA
-        tokenB: 'keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym', // WAVE
-        symbolA: 'KTA',
-        symbolB: 'WAVE',
-        decimalsA: 9,
-        decimalsB: 9,
-      },
-      // Add more pools here as they're created
-    ];
+    // Fetch pools from backend API
+    const API_BASE = import.meta.env.VITE_KEETA_API_BASE || `${window.location.origin}/api`;
+    const response = await fetch(`${API_BASE}/pools`);
 
-    // Fetch reserves for each pool from blockchain
-    const poolsWithReserves = await Promise.all(
-      knownPools.map(async (pool) => {
-        const { reserveA, reserveB } = await fetchPoolReserves(
-          pool.poolAddress,
-          pool.tokenA,
-          pool.tokenB
-        );
+    if (!response.ok) {
+      throw new Error(`Failed to fetch pools: ${response.statusText}`);
+    }
 
-        const reserveAHuman = Number(reserveA) / (10 ** pool.decimalsA);
-        const reserveBHuman = Number(reserveB) / (10 ** pool.decimalsB);
+    const data = await response.json();
 
-        return {
-          ...pool,
-          reserveA: reserveA.toString(),
-          reserveB: reserveB.toString(),
-          reserveAHuman,
-          reserveBHuman,
-          totalShares: '0', // TODO: Track total shares
-          priceAtoB: reserveAHuman > 0 ? reserveBHuman / reserveAHuman : 0,
-          priceBtoA: reserveBHuman > 0 ? reserveAHuman / reserveBHuman : 0,
-        };
-      })
-    );
+    if (!data.success || !data.pools) {
+      throw new Error('Invalid pools response from API');
+    }
 
-    return poolsWithReserves;
+    // The backend already provides all the pool data we need
+    return data.pools.map((pool: any) => ({
+      poolAddress: pool.poolAddress,
+      tokenA: pool.tokenA,
+      tokenB: pool.tokenB,
+      symbolA: pool.symbolA,
+      symbolB: pool.symbolB,
+      decimalsA: pool.decimalsA,
+      decimalsB: pool.decimalsB,
+      reserveA: pool.reserveA,
+      reserveB: pool.reserveB,
+      reserveAHuman: pool.reserveAHuman,
+      reserveBHuman: pool.reserveBHuman,
+      totalShares: pool.totalLPSupply || '0',
+      priceAtoB: pool.priceAtoB,
+      priceBtoA: pool.priceBtoA,
+    }));
   } catch (error) {
     console.error('Error fetching pools:', error);
     return [];
