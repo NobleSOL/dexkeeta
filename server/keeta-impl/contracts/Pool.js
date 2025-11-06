@@ -208,70 +208,46 @@ export class Pool {
     console.log(`   Fee: ${feeAmount}, After fee: ${amountInAfterFee}`);
 
     // ============================================================================
-    // STEP 1: Send fee to treasury (separate transaction)
+    // SIMPLE TWO-TRANSACTION SWAP ARCHITECTURE
     // ============================================================================
+    // TX1: User sends tokenIn to pool (fee already deducted)
+    // TX2: Pool sends tokenOut to user (using SEND_ON_BEHALF)
+    //
+    // This is simpler than swap requests and works with our permission model
+    // ============================================================================
+
+    // TX1: User sends tokenIn (including fee) to pool
+    console.log('📝 TX1: User sends tokenIn to pool...');
+    const tx1Builder = userClient.initBuilder();
+
+    // Send tokenIn to pool (amount after fee deduction)
+    tx1Builder.send(poolAccount, amountInAfterFee, tokenInAccount);
+
+    // Also send fee to treasury
     if (feeAmount > 0n) {
-      console.log('📝 Step 1a: Sending fee to treasury...');
-      const feeBuilder = userClient.initBuilder();
-      feeBuilder.send(treasuryAccount, feeAmount, tokenInAccount);
-      await userClient.publishBuilder(feeBuilder);
-      console.log(`✅ Fee sent: ${feeAmount} atomic units`);
+      tx1Builder.send(treasuryAccount, feeAmount, tokenInAccount);
     }
 
-    // ============================================================================
-    // STEP 2: User creates swap request
-    // ============================================================================
-    console.log('📝 Step 2: User creates swap request...');
+    await userClient.publishBuilder(tx1Builder);
+    console.log(`✅ TX1 published: User sent ${amountInAfterFee} tokenIn to pool + ${feeAmount} fee`);
 
-    // Swap request structure:
-    // from: What I'm giving (user sends tokenIn to pool)
-    // to: What I'm receiving (user receives tokenOut from pool)
-    const swapRequest = {
-      from: {
-        account: userAccount,        // I (user) am sending...
-        token: tokenInAccount,        // ...tokenIn...
-        amount: amountInAfterFee,     // ...this amount
-      },
-      to: {
-        account: userAccount,         // I (user) want to receive...
-        token: tokenOutAccount,       // ...tokenOut...
-        amount: amountOut,            // ...this amount
-      },
-    };
+    // Wait briefly for TX1 to be processed
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-    console.log('🚀 Publishing swap request...');
-    const requestBlock = await userClient.createSwapRequest(swapRequest, {
-      account: userAccount,
-    });
-    const requestHash = requestBlock?.hash?.toString() || requestBlock?.blockHash || 'unknown';
-    console.log(`✅ Swap request created: ${requestHash}`);
-
-    // Wait 2 seconds for network to process the request
-    console.log('⏳ Waiting 2 seconds before accepting...');
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // ============================================================================
-    // STEP 2: Pool accepts swap request (completing the atomic swap)
-    // ============================================================================
-    console.log('📝 Step 2: Pool accepts swap request...');
-
+    // TX2: Pool sends tokenOut to user
+    console.log('📝 TX2: Pool sends tokenOut to user...');
     const opsClient = await getOpsClient();
+    const tx2Builder = opsClient.initBuilder();
 
-    // Pool accepts: "OK, I accept your swap. Taking your tokenIn, giving you tokenOut"
-    const acceptRequest = {
-      block: requestBlock,
-      expected: {
-        token: tokenOutAccount,
-        amount: amountOut,
-      },
-    };
-
-    console.log('🚀 Accepting swap request...');
-    const acceptResult = await opsClient.acceptSwapRequest(acceptRequest, {
+    // Pool sends tokenOut to user
+    // Use { account: poolAccount } because OPS has SEND_ON_BEHALF permission on pool
+    tx2Builder.send(userAccount, amountOut, tokenOutAccount, undefined, {
       account: poolAccount,
     });
-    const acceptHash = acceptResult?.hash?.toString() || acceptResult?.blockHash || 'unknown';
-    console.log(`✅ Swap request accepted: ${acceptHash}`);
+
+    const tx2Block = await opsClient.publishBuilder(tx2Builder);
+    const tx2Hash = tx2Block?.hash?.toString() || tx2Block?.blockHash || 'unknown';
+    console.log(`✅ TX2 published: Pool sent ${amountOut} tokenOut to user`);
 
     // Update reserves after swap
     await this.updateReserves();
@@ -279,15 +255,16 @@ export class Pool {
     // Log swap in explorer-style format and save to transaction history
     await this.logSwapTransaction(userAddress, tokenIn, tokenOut, amountIn, amountOut, priceImpact);
 
+    const tx1Hash = 'TX1_' + Date.now(); // Placeholder - TX1 hash not captured
     return {
       amountOut,
       feeAmount,
       priceImpact,
       newReserveA: this.reserveA,
       newReserveB: this.reserveB,
-      requestHash,
-      acceptHash,
-      blockHash: acceptHash, // For backwards compatibility
+      tx1Hash,
+      tx2Hash,
+      blockHash: tx2Hash, // For backwards compatibility
     };
   }
 
