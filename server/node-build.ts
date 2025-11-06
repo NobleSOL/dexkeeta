@@ -13,13 +13,14 @@ const distPath = path.join(__dirname, "../spa");
 app.use(express.static(distPath));
 
 // Handle React Router - serve index.html for all non-API routes
-// Express 5 requires :0 suffix for wildcard routes
-app.get("*:0", (req, res) => {
+// Express 5 uses middleware instead of wildcard routes
+app.use((req, res, next) => {
   // Don't serve index.html for API routes
   if (req.path.startsWith("/api/") || req.path.startsWith("/health")) {
-    return res.status(404).json({ error: "API endpoint not found" });
+    return next();
   }
 
+  // Serve index.html for all other routes (SPA routing)
   res.sendFile(path.join(distPath, "index.html"));
 });
 
