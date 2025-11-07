@@ -1,0 +1,754 @@
+# Silverback DEX - Complete User Guide
+**For Keeta Network**
+
+Welcome to Silverback DEX - the first decentralized exchange on the Keeta blockchain! This guide will help you understand how the DEX works, how to use it safely, and what makes it unique.
+
+---
+
+## Table of Contents
+
+1. [What is Silverback DEX?](#what-is-silverback-dex)
+2. [Quick Start Guide](#quick-start-guide)
+3. [Understanding the Architecture](#understanding-the-architecture)
+4. [How to Swap Tokens](#how-to-swap-tokens)
+5. [How to Provide Liquidity](#how-to-provide-liquidity)
+6. [Security & Safety](#security--safety)
+7. [Mobile Experience](#mobile-experience)
+8. [Understanding Fees](#understanding-fees)
+9. [Trust Model & What's On-Chain](#trust-model--whats-on-chain)
+10. [Troubleshooting](#troubleshooting)
+11. [FAQ](#faq)
+
+---
+
+## What is Silverback DEX?
+
+Silverback DEX is a **hybrid decentralized exchange** that enables permissionless token swaps on the Keeta blockchain.
+
+### Key Features
+
+**✅ Permissionless Swaps**
+- Anyone can swap tokens without permission
+- No KYC or registration required
+- Full self-custody of your tokens
+
+**✅ Atomic Transactions**
+- All swap operations succeed or fail together
+- No risk of partial execution
+- Guaranteed all-or-nothing trades
+
+**✅ On-Chain Settlement**
+- All token transfers happen on Keeta blockchain
+- Publicly verifiable transaction history
+- Immutable and auditable ledger
+
+**⚠️ Centralized Liquidity (Temporary)**
+- Currently, only the DEX operator provides liquidity
+- Users CANNOT add liquidity to pools yet
+- This is a protocol limitation, not a design choice
+
+---
+
+## Quick Start Guide
+
+### Step 1: Access the DEX
+
+**Desktop:** Visit [https://dexkeeta.vercel.app](https://dexkeeta.vercel.app)
+**Mobile:** Same URL - optimized for mobile browsers!
+
+### Step 2: Connect Your Keeta Wallet
+
+1. Click "Import Wallet" in the Keeta section
+2. Enter your Keeta wallet seed (64 hex characters)
+3. Your wallet loads in your browser - we never see your private keys
+4. You'll see your token balances automatically
+
+**Important:** Your private keys stay in your browser's memory and are never sent to our servers.
+
+### Step 3: Select Network
+
+- Click the network dropdown (top right on desktop, next to logo on mobile)
+- Choose "Keeta" for Keeta Network swaps
+- Choose "Base" for EVM-based swaps (different network)
+
+### Step 4: Make Your First Swap
+
+1. Click the "Swap" tab
+2. Select your input token (e.g., KTA)
+3. Select your output token (e.g., RIDE)
+4. Enter the amount you want to swap
+5. Review the exchange rate and expected output
+6. Click "Swap" and confirm the transaction
+7. Wait for blockchain confirmation (usually < 30 seconds)
+
+**Pro Tip:** Start with a small test swap to familiarize yourself with the process!
+
+---
+
+## Understanding the Architecture
+
+Silverback DEX uses a unique architecture due to Keeta's current capabilities.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Your Browser (Frontend)                                │
+│  - Import wallet                                        │
+│  - View pools and balances                             │
+│  - Sign transactions                                    │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+                       │ API Calls
+                       ↓
+┌─────────────────────────────────────────────────────────┐
+│  Backend Server (Render/Railway)                        │
+│  - Calculate swap amounts (AMM math)                    │
+│  - Track pool reserves                                  │
+│  - Route swaps through pools                            │
+│  - Construct atomic transactions                        │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+                       │ Keeta SDK
+                       ↓
+┌─────────────────────────────────────────────────────────┐
+│  Keeta Blockchain                                       │
+│  - Execute atomic swaps                                 │
+│  - Transfer tokens on-chain                             │
+│  - Store pool reserves                                  │
+│  - Enforce consensus rules                              │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Why This Design?
+
+**Keeta doesn't support smart contracts yet.** This means we can't deploy on-chain AMM logic like Uniswap. Instead:
+
+- ✅ **Token custody:** On-chain (you control)
+- ✅ **Token transfers:** On-chain (atomic)
+- ✅ **Settlement:** On-chain (verifiable)
+- ⚠️ **AMM calculations:** Off-chain (backend server)
+- ⚠️ **Pool routing:** Off-chain (backend server)
+
+When Keeta adds smart contracts, we'll migrate to a fully on-chain model.
+
+---
+
+## How to Swap Tokens
+
+### Step-by-Step Swap Process
+
+**1. Get a Quote**
+- Frontend asks backend: "How much RIDE for 10 KTA?"
+- Backend calculates using constant product formula: `x * y = k`
+- You see: "You'll receive ~97,000 RIDE"
+
+**2. Review the Swap**
+- **Exchange Rate:** Current price (e.g., 1 KTA = 9,289 RIDE)
+- **Price Impact:** How much your swap affects the price
+- **Minimum Received:** Worst-case amount after slippage
+- **Fee:** 0.3% swap fee (goes to liquidity providers)
+
+**3. Sign the Transaction**
+- Click "Swap"
+- Your wallet asks you to confirm
+- You sign with your private key (never leaves your browser)
+
+**4. Atomic Execution**
+The backend constructs a single atomic transaction with 3 operations:
+
+```javascript
+Transaction = [
+  1. You send 0.03 KTA to treasury (0.3% fee)
+  2. You send 10 KTA to the pool
+  3. Pool sends 97,000 RIDE to you (via SEND_ON_BEHALF)
+]
+```
+
+**All 3 operations succeed together, or all fail together** - no partial execution!
+
+**5. Confirmation**
+- Transaction broadcasts to Keeta blockchain
+- Validators verify and execute atomically
+- You receive your tokens (usually < 30 seconds)
+- Transaction appears in Keeta Explorer
+
+### Understanding Slippage
+
+**Slippage** is the difference between expected and actual swap amount.
+
+**Why it happens:**
+- Other swaps happen before yours executes
+- Pool reserves change between quote and execution
+- Your swap moves the price (price impact)
+
+**Slippage Protection:**
+- Default tolerance: 0.5%
+- If actual amount < (expected - slippage), transaction fails
+- You keep your original tokens if slippage exceeded
+
+**Adjusting Slippage:**
+- Low slippage (0.1-0.5%): Safer, but might fail in volatile markets
+- High slippage (1-5%): More likely to succeed, but you accept worse prices
+
+---
+
+## How to Provide Liquidity
+
+### Current Status: Operator-Only Liquidity
+
+**⚠️ IMPORTANT:** Currently, users **CANNOT** provide liquidity. Only the DEX operator can add tokens to pools.
+
+**Why This Limitation?**
+
+Keeta blockchain currently lacks:
+1. **Fungible LP tokens** - No way to represent pool shares
+2. **Shared pool ownership** - Pools controlled by single private key
+3. **On-chain LP tracking** - No smart contracts to track ownership
+
+### How Liquidity Works Today
+
+**Centralized Liquidity Model:**
+- DEX operator creates pools (e.g., KTA/RIDE)
+- Operator provides ALL liquidity for each pair
+- Users can swap through these pools permissionlessly
+- Swap fees (0.3%) accumulate in pool reserves
+- Operator earns all fees (since they provide all liquidity)
+
+**Security Implications:**
+- ⚠️ Operator controls all pool liquidity
+- ⚠️ Operator could theoretically drain pools
+- ✅ BUT users maintain custody during swaps
+- ✅ Swaps are atomic and trustless
+
+### Future: Permissionless Liquidity
+
+**When will users be able to provide liquidity?**
+
+This requires Keeta protocol upgrades:
+
+**Short Term (Off-Chain Solution):**
+- Backend tracks LP positions in database
+- Users "deposit" to pools (we hold custody)
+- Distribute fees based on LP shares
+- **Risk:** Still centralized, requires trust
+
+**Medium Term (Requires Keeta Features):**
+- Fungible token standard (like ERC-20)
+- Token minting/burning operations
+- Shared account control
+- On-chain metadata for LP tracking
+
+**Long Term (Smart Contracts):**
+- Fully on-chain LP tokens
+- Automatic fee distribution
+- Permissionless pool creation
+- Full composability
+
+---
+
+## Security & Safety
+
+### What You Control ✅
+
+**Your Private Keys**
+- Keys stay in your browser memory
+- Never transmitted to servers
+- You sign every transaction
+- Backend cannot execute without your signature
+
+**Your Tokens**
+- You maintain custody at all times
+- Tokens only move when you sign
+- Backend cannot steal your funds
+- Atomic swaps protect against partial execution
+
+### What You Must Trust ⚠️
+
+**Backend Server**
+1. **Correct Calculations**
+   - Constant product formula applied correctly
+   - Slippage calculations accurate
+   - Fee calculations (0.3%) honest
+
+2. **Pool Routing**
+   - Routes to correct pool for each pair
+   - Doesn't hide pools from listing
+   - Pool information is accurate
+
+3. **Server Availability**
+   - Stays online for swaps to work
+   - Pool registry isn't lost
+   - API endpoints remain accessible
+
+**Important:** If backend goes down, your tokens are safe on-chain, but you can't swap until it's back online.
+
+### Best Practices
+
+**Protect Your Wallet:**
+- ✅ Never share your seed phrase or private key
+- ✅ Use strong passwords for encrypted exports
+- ✅ Backup your wallet seed securely offline
+- ✅ Test with small amounts before large swaps
+
+**Verify Transactions:**
+- ✅ Check amounts carefully before signing
+- ✅ Review slippage tolerance (default 0.5%)
+- ✅ Confirm token addresses in the UI
+- ✅ Start small - test with $10 before $1000
+
+**Recognize Risks:**
+- ⚠️ This is experimental software
+- ⚠️ Backend server dependency
+- ⚠️ Calculation errors possible
+- ⚠️ Loss of funds due to user error
+
+**Only swap amounts you can afford to lose.**
+
+---
+
+## Mobile Experience
+
+Silverback DEX is fully optimized for mobile browsers!
+
+### Mobile Features
+
+**Responsive Design:**
+- ✅ Compact header layout
+- ✅ Touch-friendly navigation
+- ✅ Mobile-optimized card layouts
+- ✅ Readable pool information
+
+**Mobile Navigation:**
+- Tap the menu icon (top right) to access:
+  - Swap
+  - Pool (view pools)
+  - Positions (view holdings)
+
+**Wallet Connection:**
+- Import wallet works same as desktop
+- Balances display in mobile-friendly format
+- Address truncated for readability
+
+### Mobile Tips
+
+1. **Use landscape mode** for easier viewing of pool cards
+2. **Double-check addresses** before confirming swaps
+3. **Ensure stable internet** during transactions
+4. **Save your seed phrase** securely before mobile wallet use
+
+---
+
+## Understanding Fees
+
+### Swap Fees
+
+**0.3% Swap Fee**
+- Standard AMM rate (same as Uniswap V2)
+- Goes to liquidity providers
+- Currently earned by DEX operator (since they provide all liquidity)
+- Automatically reinvested into pool reserves
+
+**Example:**
+```
+You swap: 10 KTA
+Swap fee: 0.03 KTA (0.3%)
+To pool: 9.97 KTA
+Treasury: 0.03 KTA
+```
+
+### Network Fees
+
+**Keeta Transaction Fee**
+- Goes to Keeta network treasury
+- Covers blockchain computation costs
+- Usually very small (< $0.01 equivalent)
+- Varies based on network congestion
+
+### Total Cost
+
+**When you swap 10 KTA for RIDE:**
+```
+Input:        10 KTA
+Swap Fee:     -0.03 KTA   (0.3% - goes to LP)
+Network Fee:  ~0.001 KTA  (goes to Keeta treasury)
+To Pool:      9.97 KTA
+You Receive:  ~97,000 RIDE (based on exchange rate)
+```
+
+**No Hidden Fees:**
+- ✅ No deposit/withdrawal fees
+- ✅ No listing fees
+- ✅ No custody fees
+- ✅ You pay exactly what you see
+
+---
+
+## Trust Model & What's On-Chain
+
+### ✅ What's On-Chain (Trustless)
+
+| Data | Location | How to Verify |
+|------|----------|---------------|
+| **Token balances** | Pool accounts | Query via Keeta API |
+| **Token transfers** | Transaction history | View on Keeta Explorer |
+| **Atomic execution** | Vote staples | All operations visible |
+| **Your wallet balance** | Your account | Check anytime on-chain |
+
+**Example Verification:**
+```javascript
+// Check pool reserves (anyone can do this)
+import { UserClient } from '@keetanetwork/keetanet-client';
+
+const client = UserClient.fromNetwork('test', null);
+const poolAddress = 'keeta_atulpbgzwrphasyensi234jrpnyefv4fqoaovrjrex4cjw6rbiibq6panevsg';
+
+const balances = await client.allBalances({ account: poolAddress });
+// Returns: actual KTA and RIDE in the pool
+```
+
+### ⚠️ What's Off-Chain (Requires Trust)
+
+| Data | Location | Trust Required |
+|------|----------|---------------|
+| **Pool registry** | `.pools.json` on server | Trust backend lists correct pools |
+| **AMM calculations** | Backend logic | Trust math is correct |
+| **Price quotes** | Backend response | Trust formula is standard |
+| **Pool routing** | Backend decision | Trust correct pool selected |
+
+**What This Means:**
+- Backend could display incorrect swap amounts (but can't steal your tokens)
+- Backend could hide pools from listing
+- If backend goes down, swaps don't work (but tokens stay safe)
+
+**But You Maintain:**
+- ✅ Full custody of your tokens
+- ✅ Ability to verify all on-chain data
+- ✅ Atomic swap protection
+- ✅ Immutable transaction history
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**"Failed to fetch pools" Error**
+
+**Cause:** Backend server unreachable
+**Fix:**
+- Check your internet connection
+- Wait a moment and refresh the page
+- Backend may be restarting (usually < 1 minute)
+
+---
+
+**"Insufficient balance" Error**
+
+**Cause:** Not enough tokens for swap + fees
+**Fix:**
+- Reduce swap amount slightly
+- Ensure you have tokens for network fees
+- Check your wallet balance in the UI
+
+---
+
+**"Slippage tolerance exceeded" Error**
+
+**Cause:** Price moved too much during transaction
+**Fix:**
+- Increase slippage tolerance in settings
+- Try smaller swap amount (less price impact)
+- Wait for less price volatility
+- Check if pool has enough liquidity
+
+---
+
+**Transaction Pending Forever**
+
+**Cause:** Keeta network congestion or issue
+**Fix:**
+- Wait for network confirmation (can take 1-2 minutes)
+- Check transaction hash on Keeta Explorer
+- Refresh the page to see updated status
+- Contact support if stuck > 5 minutes
+
+---
+
+**Wallet Won't Connect**
+
+**Cause:** Invalid seed format
+**Fix:**
+- Ensure seed is exactly 64 hex characters
+- No spaces or special characters
+- Seed should only contain 0-9 and a-f
+- Try copying seed from secure storage
+
+---
+
+### Getting Help
+
+**Technical Issues:**
+- Check this guide's troubleshooting section
+- View `/keeta/KEETA_DEX_ARCHITECTURE.md` for technical details
+- Report bugs on GitHub Issues
+
+**Security Concerns:**
+- Report vulnerabilities responsibly
+- Never share private keys in support requests
+
+---
+
+## FAQ
+
+### General Questions
+
+**Q: Is my wallet safe?**
+A: Yes - your private keys never leave your browser. They're stored in memory only and never sent to servers. We cannot access your funds.
+
+**Q: What if the backend server goes down?**
+A: Swaps won't work until it's back online, but your tokens are 100% safe on-chain. You can always access them directly via the Keeta network.
+
+**Q: How do I know the prices are fair?**
+A: Prices follow the constant product formula (`x * y = k`), the same math as Uniswap V2. It's purely algorithmic and not controlled by anyone. You can verify the formula in the open-source code.
+
+**Q: Can I cancel a transaction after signing?**
+A: Once submitted to the Keeta blockchain, transactions cannot be cancelled. Always double-check amounts before signing!
+
+**Q: Where can I see my transaction history?**
+A: All transactions are on the Keeta blockchain. View them in:
+- The Portfolio tab in the DEX
+- Keeta Block Explorer
+- Your wallet's transaction list
+
+**Q: What happens if I lose my wallet seed?**
+A: **Your tokens are permanently lost.** There is no recovery mechanism. Always backup your seed phrase securely offline!
+
+---
+
+### Technical Questions
+
+**Q: Why isn't this fully decentralized like Uniswap?**
+A: Keeta blockchain doesn't support smart contracts yet. We use atomic transactions and on-chain settlement, but AMM logic runs on a backend server. When Keeta adds smart contracts, we'll migrate to a fully on-chain model.
+
+**Q: Can I verify the swap math?**
+A: Yes! The constant product formula is:
+```
+amountOut = (amountIn * 997 * reserveOut) / (reserveIn * 1000 + amountIn * 997)
+```
+Where 997/1000 = 99.7% (accounting for 0.3% fee)
+
+**Q: What prevents the backend from cheating?**
+A: Technical honesty - the backend could display incorrect prices, but:
+- Cannot steal your tokens (you sign transactions)
+- Cannot execute without your approval
+- All swaps are on-chain and verifiable
+- Open-source code can be audited
+
+**Q: Can I run my own backend?**
+A: Yes! The code is open source. You'd need to:
+- Clone the repository
+- Track pool state independently
+- Keep server online 24/7
+- Maintain your own pool registry
+
+---
+
+### Liquidity Questions
+
+**Q: When can users provide liquidity?**
+A: This requires Keeta protocol upgrades for fungible LP tokens, shared ownership, or smart contracts. Timeline depends on Keeta team, not us. Follow our roadmap for updates!
+
+**Q: Why can't I add to existing pools?**
+A: Keeta lacks the infrastructure for:
+- Fungible LP tokens (like ERC-20)
+- Shared pool ownership (multi-sig)
+- On-chain LP share tracking
+
+**Q: How does the operator earn money?**
+A: The operator:
+- Provides all liquidity (capital at risk)
+- Earns 0.3% fee from every swap
+- Bears impermanent loss risk
+- Covers backend server costs
+
+This is like being a market maker, not a fee extractor.
+
+---
+
+### Mobile Questions
+
+**Q: Does Silverback DEX work on mobile?**
+A: Yes! Fully optimized for mobile browsers with:
+- Responsive layout
+- Touch-friendly buttons
+- Icon-only navigation
+- Optimized pool cards
+
+**Q: Can I use MetaMask Mobile?**
+A: Not for Keeta swaps (Keeta uses different key format). For Keeta:
+- Import your Keeta seed directly in the browser
+- For Base network swaps, MetaMask works!
+
+**Q: Is there a mobile app?**
+A: Not yet - use the mobile web app at dexkeeta.vercel.app. A native app may come in the future.
+
+---
+
+## Roadmap
+
+### What's Live Today ✅
+
+- ✅ Permissionless token swaps
+- ✅ Atomic transaction execution
+- ✅ Mobile-responsive UI
+- ✅ Multiple token pairs
+- ✅ Real-time price quotes
+- ✅ Wallet import/export
+- ✅ Transaction history
+- ✅ Pool reserve display
+
+### Coming Soon 🔜
+
+**Short Term (Weeks)**
+- Better mobile optimizations
+- Price charts and analytics
+- More token pairs
+- Transaction history page
+- Pool statistics
+
+**Medium Term (Months)**
+- Database migration (PostgreSQL)
+- Production server deployment
+- Uptime monitoring
+- Automated backups
+- Multiple backend instances (redundancy)
+
+**Long Term (Dependent on Keeta)**
+- Permissionless liquidity provision
+- On-chain LP tokens
+- Smart contract migration
+- Governance system
+- Full DeFi composability
+
+---
+
+## Supported Tokens
+
+**Currently Available:**
+- **KTA** (Keeta native token)
+- **RIDE** (Community token)
+- **CAT** (Community token)
+
+**Active Pools:**
+- KTA/RIDE
+- KTA/CAT
+
+**Coming Soon:**
+- More community tokens
+- Stablecoins (when available)
+- Governance tokens
+
+**Want a new pool?**
+- Contact the DEX operator
+- Pools are created based on demand and liquidity
+
+---
+
+## Disclaimer
+
+**THIS DEX IS EXPERIMENTAL SOFTWARE. USE AT YOUR OWN RISK.**
+
+### No Warranties
+
+- ❌ No guarantees of uptime or availability
+- ❌ No insurance against loss of funds
+- ❌ No warranty of correctness or accuracy
+- ❌ No liability for bugs or errors
+
+### Known Risks
+
+**Technical Risks:**
+- ⚠️ Backend server dependency (single point of failure)
+- ⚠️ Possible calculation errors in AMM logic
+- ⚠️ Data loss risk (JSON file storage)
+- ⚠️ Software bugs or vulnerabilities
+
+**Trust Risks:**
+- ⚠️ Backend operator could display incorrect information
+- ⚠️ Pool list could be incomplete
+- ⚠️ Price quotes could be miscalculated
+- ⚠️ Operator controls all liquidity
+
+**Blockchain Risks:**
+- ⚠️ Keeta network downtime or issues
+- ⚠️ Transaction failures
+- ⚠️ Loss of funds due to user error (wrong address, lost seed, etc.)
+
+### Your Responsibilities
+
+**By using Silverback DEX, you acknowledge:**
+- You understand the trust assumptions
+- You accept all risks
+- You have verified the information independently
+- You will not hold the operator liable for losses
+- You are solely responsible for your private keys
+- You understand this is experimental software
+
+**Only use funds you can afford to lose.**
+
+---
+
+## Contact & Support
+
+**Website:** https://dexkeeta.vercel.app
+**GitHub:** https://github.com/NobleSOL/dexkeeta
+**Documentation:** `/keeta/docs/` folder in the repository
+
+**For Support:**
+- Technical issues: GitHub Issues
+- Security concerns: Responsible disclosure
+- General questions: Check this guide first!
+
+---
+
+## Acknowledgments
+
+Built with:
+- **Keeta Network** - Layer 1 blockchain
+- **React** - Frontend framework
+- **Vite** - Build tool
+- **TailwindCSS** - Styling
+- **Express** - Backend server
+- **Vercel** - Frontend hosting
+- **Render** - Backend hosting
+
+Special thanks to the Keeta community for testing and feedback!
+
+---
+
+## Conclusion
+
+Silverback DEX represents the **best possible DEX architecture given Keeta's current capabilities**. It leverages:
+
+✅ On-chain atomic transactions
+✅ On-chain token custody and settlement
+✅ Permissionless trading for users
+⚠️ Off-chain AMM calculations (transparent limitation)
+⚠️ Centralized liquidity provisioning (temporary)
+
+This hybrid model is **honest about its trust assumptions** and provides **verifiable on-chain settlement**. When Keeta adds smart contract support, we'll migrate to a fully on-chain model.
+
+**Until then, users should understand:**
+- You're trusting the backend for calculations and routing
+- You maintain full custody of your tokens
+- Swaps are atomic and verifiable on-chain
+- This is an interim solution, not the final form
+
+**Happy trading! 🚀**
+
+---
+
+*Last Updated: 2025-11-06*
+*Version: 3.0 (Focused on operations, protocol, and centralized liquidity model)*
+*Guide Author: Silverback Team*
