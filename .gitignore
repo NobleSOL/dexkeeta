@@ -31,8 +31,7 @@ dist-ssr
 .env.*.local
 .env.production
 
-# Keeta persistent storage (contains pool data and positions)
-keeta/.pools.json
+# Keeta persistent storage (positions and transactions only - pools now tracked in git)
 keeta/.pools.json.backup
 keeta/.liquidity-positions-*.json
 keeta/.transactions.json
