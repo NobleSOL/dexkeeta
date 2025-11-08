@@ -1,5 +1,6 @@
-import { TrendingUp, Droplet, ArrowRight, Coins } from "lucide-react";
+import { TrendingUp, Droplet, ArrowRight, Coins, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 export interface KeetaPoolCardData {
   poolAddress: string;
@@ -24,10 +25,12 @@ export interface KeetaPoolCardData {
 
 export function KeetaPoolCard({
   pool,
-  onManage
+  onManage,
+  onRemoveLiquidity
 }: {
   pool: KeetaPoolCardData;
   onManage: (pool: KeetaPoolCardData) => void;
+  onRemoveLiquidity?: (pool: KeetaPoolCardData, percent: number) => Promise<void>;
 }) {
   // Handle undefined reserves gracefully
   const reserveAHuman = pool.reserveAHuman ?? 0;
@@ -62,6 +65,23 @@ export function KeetaPoolCard({
   const userDailyFees = hasPosition
     ? (totalDailyFees * pool.userPosition!.sharePercent / 100)
     : 0;
+
+  // State for position management
+  const [removeLiqPercent, setRemoveLiqPercent] = useState(100);
+  const [removingLiq, setRemovingLiq] = useState(false);
+  const [showManagement, setShowManagement] = useState(false);
+
+  const handleRemoveLiquidity = async (percent: number) => {
+    if (!onRemoveLiquidity) return;
+
+    setRemovingLiq(true);
+    try {
+      await onRemoveLiquidity(pool, percent);
+    } finally {
+      setRemovingLiq(false);
+      setShowManagement(false);
+    }
+  };
 
   return (
     <div className={`rounded-xl border bg-card/40 backdrop-blur p-3 sm:p-4 transition-all hover:border-brand/50 hover:shadow-lg w-full min-w-0 ${hasPosition ? 'border-brand/30 bg-brand/5' : 'border-border/60'}`}>
@@ -167,17 +187,103 @@ export function KeetaPoolCard({
       </div>
 
       {/* Action buttons */}
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex-1 text-xs h-8"
-          onClick={() => onManage(pool)}
-        >
-          {hasPosition ? 'Manage' : 'Add Liquidity'}
-          <ArrowRight className="h-3 w-3 ml-1" />
-        </Button>
-      </div>
+      {hasPosition ? (
+        showManagement ? (
+          // Show position management UI
+          <div className="space-y-3">
+            {/* Remove Liquidity Controls */}
+            <div className="rounded-lg border border-brand/40 bg-brand/10 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-muted-foreground">Remove Liquidity</span>
+                <span className="text-sm font-semibold text-sky-400">{removeLiqPercent}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={removeLiqPercent}
+                onChange={(e) => setRemoveLiqPercent(Number(e.target.value))}
+                className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-sky-400"
+              />
+              <div className="flex gap-1 mt-2">
+                {[25, 50, 75, 100].map((percent) => (
+                  <Button
+                    key={percent}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRemoveLiqPercent(percent)}
+                    className="flex-1 text-xs h-7"
+                  >
+                    {percent}%
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setShowManagement(false)}
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs h-8"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleRemoveLiquidity(removeLiqPercent)}
+                disabled={removingLiq}
+                variant="destructive"
+                size="sm"
+                className="flex-1 text-xs h-8"
+              >
+                {removingLiq ? (
+                  <>
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                    Removing...
+                  </>
+                ) : (
+                  `Remove ${removeLiqPercent}%`
+                )}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          // Show Manage/Add buttons
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 text-xs h-8"
+              onClick={() => onManage(pool)}
+            >
+              Add More
+              <ArrowRight className="h-3 w-3 ml-1" />
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="flex-1 text-xs h-8"
+              onClick={() => setShowManagement(true)}
+            >
+              Remove
+            </Button>
+          </div>
+        )
+      ) : (
+        // No position - show Add Liquidity button
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 text-xs h-8"
+            onClick={() => onManage(pool)}
+          >
+            Add Liquidity
+            <ArrowRight className="h-3 w-3 ml-1" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,9 +2,9 @@
 
 ## What is the Keeta DEX?
 
-A self-custodial decentralized exchange for swapping Keeta network tokens (RIDE, WAVE, KTA, etc.).
+A permissionless decentralized exchange for swapping Keeta network tokens (RIDE, WAVE, KTA, TEST, etc.).
 
-**Unique Feature:** Pool creators own and control their liquidity directly - no custody by the platform!
+**Unique Feature:** Truly decentralized pool ownership - creators own their pools, and anyone can provide liquidity!
 
 ## Quick Start
 
@@ -24,22 +24,23 @@ A self-custodial decentralized exchange for swapping Keeta network tokens (RIDE,
 - Click "Swap" and confirm the transaction
 - Your tokens swap atomically (all-or-nothing)
 
-### 4. Create a Pool (Become a Market Maker!)
-- Choose a token pair (e.g., RIDE/WAVE)
+### 4. Create a Pool (Become a Liquidity Provider!)
+- Choose a token pair (e.g., RIDE/TEST)
 - If no pool exists, YOU can create it
-- **You will own this pool** - full self-custody!
+- **You own the pool** - it's stored on-chain under your address
 - Only ONE pool allowed per pair (first come, first served)
-- You earn 100% of swap fees for your pair
+- Pool creators earn fees proportional to their liquidity
 
-### 5. Add Liquidity to YOUR Pool
-- Add tokens to the pool you own
-- Maintain full custody (you control withdrawals)
-- Earn 0.3% fee from every swap through your pool
+### 5. Add Liquidity to ANY Pool (Permissionless!)
+- Add tokens to any existing pool - no permission needed!
+- Your liquidity is tracked on-chain via the pool's storage account
+- Earn 0.3% fee from swaps, proportional to your share of the pool
+- The DEX router (OPS) facilitates transactions but never holds your funds
 
-### 6. Remove Liquidity from YOUR Pool
-- Withdraw from your pool anytime (you're the owner!)
-- Receive your tokens back plus all earned fees
-- No permission needed - it's your pool!
+### 6. Remove Liquidity from Pools
+- Withdraw your liquidity anytime from any pool you've provided to
+- Receive your tokens back plus earned fees
+- Proportional to your share of the total pool liquidity
 
 ---
 
@@ -47,16 +48,16 @@ A self-custodial decentralized exchange for swapping Keeta network tokens (RIDE,
 
 ```
 You ────► Backend Server ────► Keeta Blockchain
-         (Calculates math)     (Moves tokens)
+         (Calculates math)     (Routes swaps via OPS)
 ```
 
 **When you swap:**
-1. Server calculates how many tokens you'll receive
-2. You sign a transaction with your wallet
-3. Blockchain executes the swap atomically
+1. Server calculates how many tokens you'll receive (using AMM formula)
+2. You sign and send tokenIn + fee to the pool (TX1)
+3. OPS router (on-chain) sends tokenOut back to you using SEND_ON_BEHALF permission (TX2)
 4. You receive your tokens instantly
 
-**Your tokens never leave your control** - the server can only suggest transactions, YOU must sign them.
+**Your tokens never leave your control** - you send directly to pools, and the OPS router facilitates the return transfer. No custodial intermediary!
 
 ---
 
@@ -82,16 +83,22 @@ You ────► Backend Server ────► Keeta Blockchain
 ### ⚠️ What to Trust
 
 **Backend Server**
-- Calculates swap amounts correctly
-- Tracks your LP positions accurately
-- Stays online for swaps to work
+- Calculates swap amounts correctly (AMM formula: x * y = k)
+- Tracks LP positions (reads from on-chain pool storage)
+- Stays online for UI to work
 
-**Why?** Keeta doesn't support smart contracts yet, so the AMM math happens on our server instead of on-chain.
+**OPS Router (On-Chain)**
+- Facilitates token transfers between users and pools
+- Has SEND_ON_BEHALF permission on pools to complete swaps
+- Cannot steal funds (only moves tokens according to approved transactions)
+
+**Why this architecture?** Keeta doesn't support smart contracts yet, so the AMM math happens on our server. The OPS router acts like an EVM router (e.g., Uniswap Router) - it coordinates transactions but doesn't custody funds.
 
 **What this means:**
-- Server could theoretically display wrong prices (but can't steal tokens)
-- If server goes down, swaps stop working (but tokens stay safe)
-- LP positions are tracked off-chain (but token deposits are on-chain)
+- Server could theoretically display wrong prices (but you always approve the exact amounts)
+- If server goes down, UI stops working (but tokens stay safe in pools)
+- OPS router can only move tokens as part of legitimate swaps (enforced by Keeta permissions)
+- LP positions are tracked on-chain via pool storage accounts
 
 ---
 
@@ -101,29 +108,30 @@ You ────► Backend Server ────► Keeta Blockchain
 
 | Feature | Keeta DEX | Uniswap (Ethereum) | Coinbase (CEX) |
 |---------|-----------|-------------------|----------------|
-| **Pool ownership** | YOU own your pool | Protocol owns pools | Exchange owns liquidity |
-| **Token custody** | You control (self-custodial!) | Deposit to protocol | Exchange controls |
-| **Swap execution** | On-chain atomic | On-chain contract | Off-chain database |
+| **Pool ownership** | Creator owns pool | Protocol owns pools | Exchange owns liquidity |
+| **Token custody** | Non-custodial (pools on-chain) | Non-custodial (deposit to protocol) | Custodial (exchange controls) |
+| **Swap execution** | On-chain atomic (2 TX) | On-chain contract (1 TX) | Off-chain database |
 | **AMM logic** | Off-chain server | On-chain contract | Centralized orderbook |
-| **Who can provide liquidity** | Only pool creator | Anyone | Exchange only |
-| **Trust required** | Backend routing | Smart contract code | Exchange operator |
+| **Who can provide liquidity** | Anyone (permissionless!) | Anyone | Exchange only |
+| **Trust required** | Backend calculations + OPS router | Smart contract code | Exchange operator |
 
 ### What Makes This Unique?
 
-**Self-Custodial "Pool Operator" Model:**
-- ✅ You OWN your pool (not just provide liquidity)
-- ✅ Full custody of your tokens at all times
-- ✅ Withdraw anytime without permission
-- ✅ Earn 100% of fees from your pair
-- ✅ On-chain settlement
+**Decentralized Pool Ownership + Permissionless Liquidity:**
+- ✅ Pool creators OWN their pools (stored under their address)
+- ✅ Anyone can add liquidity to any pool (no permission needed!)
+- ✅ OPS router facilitates swaps (like Uniswap Router) but doesn't custody funds
+- ✅ All liquidity tracked on-chain in pool storage accounts
+- ✅ On-chain settlement with atomic swaps
+- ✅ Proportional fee distribution to all liquidity providers
 
 **Trade-offs:**
 - ⚠️ Only ONE pool per pair (first come, first served)
-- ⚠️ Only pool creator can provide liquidity
-- ⚠️ Server routes swaps (but can't steal funds)
-- ⚠️ AMM logic calculated off-chain
+- ⚠️ Server calculates AMM math off-chain (but you approve exact amounts)
+- ⚠️ OPS router has SEND_ON_BEHALF permission (needed to complete swaps)
+- ⚠️ Two-transaction swap model (TX1: user→pool, TX2: pool→user via OPS)
 
-**Why this design?** Keeta blockchain doesn't have smart contracts yet. This "pool operator" model maintains maximum custody while we wait for full on-chain capability.
+**Why this design?** Keeta blockchain doesn't have smart contracts yet. This architecture mimics EVM DEXs (creator-owned pools + router pattern) while maintaining decentralization and permissionless access.
 
 ---
 
@@ -321,4 +329,4 @@ A: Keeta blockchain doesn't support smart contracts yet. When it does, we'll mig
 
 *Happy swapping! 🔄*
 
-*Last Updated: 2025-11-05*
+*Last Updated: 2025-11-07*

@@ -1,8 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { handleDemo } from "./routes/demo";
-import keetaRoutes from "./keeta-routes";
+import keetaRoutes from "./keeta-routes.ts";
 
 export function createServer() {
   const app = express();
@@ -17,8 +16,6 @@ export function createServer() {
     const ping = process.env.PING_MESSAGE ?? "ping";
     res.json({ message: ping });
   });
-
-  app.get("/api/demo", handleDemo);
 
   // Keeta DEX API routes
   app.use(keetaRoutes);

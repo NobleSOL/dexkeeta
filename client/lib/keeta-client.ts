@@ -176,6 +176,7 @@ export async function fetchTokenMetadata(tokenAddress: string) {
     'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52': { symbol: 'KTA', decimals: 9 },
     'keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym': { symbol: 'WAVE', decimals: 9 },
     'keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo': { symbol: 'RIDE', decimals: 5 },
+    'keeta_apkuewquwvrain2g7nkgqaobpiqy77qosl52dfheqyhbt4dfozdn5lmzmqh7w': { symbol: 'TEST', decimals: 9 },
   };
 
   const known = knownTokens[tokenAddress];
@@ -186,26 +187,23 @@ export async function fetchTokenMetadata(tokenAddress: string) {
   try {
     const client = createKeetaClient();
 
-    console.log(`🔍 Fetching metadata for: ${tokenAddress}`);
+    console.log(`🔍 Fetching metadata for: ${tokenAddress.slice(0, 20)}...`);
 
-    // Use getAccountsInfo (plural) which takes an array
-    const accountsInfo = await client.getAccountsInfo([tokenAddress]);
-    console.log(`📊 Raw accountsInfo response:`, accountsInfo);
+    // Use getAccountInfo (singular) which is available in the client SDK
+    const accountInfo = await client.getAccountInfo(tokenAddress);
+    console.log(`📊 Raw accountInfo response for ${tokenAddress.slice(0, 20)}...:`, accountInfo);
 
-    const info = accountsInfo[tokenAddress];
-    console.log(`📊 Info for ${tokenAddress.slice(0, 20)}...:`, info);
-
-    if (info?.info) {
+    if (accountInfo?.info) {
       // Get symbol from info.name (Keeta stores token symbol here)
-      const symbol = info.info.name || tokenAddress.slice(0, 8) + '...';
+      const symbol = accountInfo.info.name || tokenAddress.slice(0, 8) + '...';
       console.log(`  Symbol from info.name: ${symbol}`);
 
       // Get decimals from metadata object
       let decimals = 9; // Default
-      if (info.info.metadata) {
+      if (accountInfo.info.metadata) {
         try {
           // Metadata is base64 encoded
-          const metadataStr = atob(info.info.metadata);
+          const metadataStr = atob(accountInfo.info.metadata);
           const metaObj = JSON.parse(metadataStr);
           console.log(`  Parsed metadata:`, metaObj);
           decimals = Number(metaObj.decimalPlaces || metaObj.decimals || 9);
@@ -323,43 +321,27 @@ export async function fetchPools() {
  */
 export async function fetchLiquidityPositions(seed: string, accountIndex: number = 0) {
   try {
-    console.log('🔍 Fetching liquidity positions...');
+    console.log('🔍 Fetching liquidity positions from backend...');
 
-    // Get all user balances
-    const balances = await fetchBalances(seed, accountIndex);
-    console.log('✅ User balances:', balances);
+    // Get user address from seed
+    const userAddress = getAddressFromSeed(seed, accountIndex);
+    console.log('📍 User address:', userAddress);
 
-    // Get list of known pools
-    const pools = await fetchPools();
-    console.log('✅ Known pools:', pools);
+    // Call backend API to get positions
+    const response = await fetch(`/api/liquidity/positions/${userAddress}`);
 
-    // For each pool, check if user has LP tokens (liquidity in the pool)
-    const positions = [];
-
-    for (const pool of pools) {
-      // Check if user has any balance in the pool address itself
-      // In Keeta's user-owned pool model, users hold their liquidity in the pool storage account
-      const poolBalance = balances.find(b => b.address === pool.poolAddress);
-
-      if (poolBalance && Number(poolBalance.balance) > 0) {
-        // User has liquidity in this pool
-        positions.push({
-          poolAddress: pool.poolAddress,
-          tokenA: pool.tokenA,
-          tokenB: pool.tokenB,
-          symbolA: pool.symbolA,
-          symbolB: pool.symbolB,
-          liquidity: poolBalance.balance,
-          sharePercent: 0, // TODO: Calculate share percentage
-          amountA: '0', // TODO: Calculate underlying token amounts
-          amountB: '0',
-          timestamp: Date.now()
-        });
-      }
+    if (!response.ok) {
+      throw new Error(`Failed to fetch positions: ${response.statusText}`);
     }
 
-    console.log('✅ Found positions:', positions);
-    return positions;
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Unknown error fetching positions');
+    }
+
+    console.log('✅ Found positions from backend:', result.positions);
+    return result.positions || [];
   } catch (error) {
     console.error('Error fetching liquidity positions:', error);
     return [];
@@ -367,35 +349,8 @@ export async function fetchLiquidityPositions(seed: string, accountIndex: number
 }
 
 /**
- * Calculate swap output amount using constant product formula (x * y = k)
- * Includes 0.3% swap fee
- */
-function calculateSwapOutput(
-  amountIn: bigint,
-  reserveIn: bigint,
-  reserveOut: bigint
-): { amountOut: bigint; priceImpact: number } {
-  if (reserveIn === 0n || reserveOut === 0n) {
-    return { amountOut: 0n, priceImpact: 0 };
-  }
-
-  // Apply 0.3% fee (multiply by 997, divide by 1000)
-  const amountInWithFee = amountIn * 997n;
-  const numerator = amountInWithFee * reserveOut;
-  const denominator = (reserveIn * 1000n) + amountInWithFee;
-  const amountOut = numerator / denominator;
-
-  // Calculate price impact
-  const exactQuote = (amountIn * reserveOut) / reserveIn;
-  const priceImpact = exactQuote > 0n 
-    ? Number((exactQuote - amountOut) * 10000n / exactQuote) / 100
-    : 0;
-
-  return { amountOut, priceImpact };
-}
-
-/**
- * Get swap quote for a token pair
+ * Get swap quote for a token pair using CLIENT-SIDE calculation
+ * This eliminates the need for backend API calls, making quotes instant
  */
 export async function getSwapQuote(
   tokenIn: string,
@@ -411,7 +366,10 @@ export async function getSwapQuote(
   feeAmountHuman: number;
 } | null> {
   try {
-    // Fetch pool reserves
+    // Import client-side AMM math
+    const { calculateSwapQuote } = await import('./amm-math');
+
+    // Fetch pool reserves (from local cache)
     const pools = await fetchPools();
     const pool = pools.find(p => p.poolAddress === poolAddress);
 
@@ -422,34 +380,30 @@ export async function getSwapQuote(
 
     // Determine which token is A and which is B
     const isAtoB = tokenIn === pool.tokenA;
-    const reserveIn = isAtoB ? BigInt(pool.reserveA) : BigInt(pool.reserveB);
-    const reserveOut = isAtoB ? BigInt(pool.reserveB) : BigInt(pool.reserveA);
+    const reserveIn = isAtoB ? pool.reserveA : pool.reserveB;
+    const reserveOut = isAtoB ? pool.reserveB : pool.reserveA;
     const decimalsIn = isAtoB ? pool.decimalsA : pool.decimalsB;
     const decimalsOut = isAtoB ? pool.decimalsB : pool.decimalsA;
 
-    // Convert amountIn to atomic units using actual token decimals
-    const amountInAtomic = BigInt(Math.floor(parseFloat(amountIn) * Math.pow(10, decimalsIn)));
-
-    // Calculate fee (0.3% = 30 bps)
-    const feeAmount = (amountInAtomic * 30n) / 10000n;
-    const feeAmountHuman = Number(feeAmount) / (10 ** decimalsIn);
-
-    // Calculate output
-    const { amountOut, priceImpact } = calculateSwapOutput(
-      amountInAtomic,
+    // Calculate quote using client-side AMM math (instant, no API call!)
+    const quote = calculateSwapQuote(
+      amountIn,
       reserveIn,
-      reserveOut
+      reserveOut,
+      decimalsIn,
+      decimalsOut,
+      0.5 // 0.5% slippage tolerance
     );
 
-    // Apply 0.5% slippage tolerance
-    const minimumReceived = (amountOut * 995n) / 1000n;
+    // Convert feeAmount to human-readable
+    const feeAmountHuman = Number(quote.feeAmount) / Math.pow(10, decimalsIn);
 
     return {
-      amountOut: amountOut.toString(),
-      amountOutHuman: Number(amountOut) / (10 ** decimalsOut),
-      priceImpact,
-      minimumReceived: minimumReceived.toString(),
-      feeAmount: feeAmount.toString(),
+      amountOut: quote.amountOut.toString(),
+      amountOutHuman: parseFloat(quote.amountOutHuman),
+      priceImpact: quote.priceImpact,
+      minimumReceived: quote.minimumReceived,
+      feeAmount: quote.feeAmount.toString(),
       feeAmountHuman,
     };
   } catch (error) {
@@ -606,56 +560,58 @@ export async function addLiquidity(
   tokenB: string,
   amountADesired: string,
   amountBDesired: string,
+  decimalsA: number = 9,
+  decimalsB: number = 9,
   accountIndex: number = 0
 ): Promise<{ success: boolean; amountA?: string; amountB?: string; blockHash?: string; error?: string }> {
   try {
-    console.log('💧 Adding liquidity...');
+    console.log('💧 Adding liquidity via backend API (with on-chain LP tracking)...');
     console.log('  poolAddress:', poolAddress);
+    console.log('  tokenA:', tokenA);
+    console.log('  tokenB:', tokenB);
     console.log('  amountADesired:', amountADesired);
     console.log('  amountBDesired:', amountBDesired);
+    console.log('  decimalsA:', decimalsA);
+    console.log('  decimalsB:', decimalsB);
 
-    // Create client from seed
-    const client = createKeetaClientFromSeed(seed, accountIndex);
+    // Call backend API which handles LP STORAGE account creation and on-chain tracking
+    console.log('📡 Calling fetch to /api/liquidity/add...');
+    const response = await fetch('/api/liquidity/add', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userSeed: seed,
+        tokenA,
+        tokenB,
+        amountADesired,
+        amountBDesired,
+        amountAMin: '0',
+        amountBMin: '0',
+      }),
+    });
 
-    // Convert amounts to atomic units
-    const amountA = BigInt(Math.floor(parseFloat(amountADesired) * 1e9));
-    const amountB = BigInt(Math.floor(parseFloat(amountBDesired) * 1e9));
+    console.log('📡 Fetch completed, status:', response.status, response.statusText);
+    console.log('📡 Parsing JSON response...');
+    const data = await response.json();
+    console.log('📡 JSON parsed:', data);
 
-    console.log('  amountA (atomic):', amountA.toString());
-    console.log('  amountB (atomic):', amountB.toString());
-
-    // Build transaction
-    const builder = client.initBuilder();
-
-    const poolAccount = KeetaSDK.lib.Account.fromPublicKeyString(poolAddress);
-    const tokenAAccount = KeetaSDK.lib.Account.fromPublicKeyString(tokenA);
-    const tokenBAccount = KeetaSDK.lib.Account.fromPublicKeyString(tokenB);
-
-    // User sends both tokens to the pool
-    builder.send(poolAccount, amountA, tokenAAccount);
-    builder.send(poolAccount, amountB, tokenBAccount);
-
-    // Publish transaction
-    console.log('📤 Publishing add liquidity transaction...');
-    const result = await client.publishBuilder(builder);
-    console.log('✅ Transaction published:', result);
-
-    // Extract block hash (use second block - index 1)
-    let blockHash = null;
-    if (builder.blocks && builder.blocks.length > 1) {
-      const block = builder.blocks[1];
-      if (block && block.hash) {
-        blockHash = typeof block.hash === 'string'
-          ? block.hash.toUpperCase()
-          : block.hash.toString('hex').toUpperCase();
-      }
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to add liquidity');
     }
+
+    console.log('✅ Liquidity added successfully:');
+    console.log('  User address:', data.userAddress);
+    console.log('  Amount A:', data.result.amountA);
+    console.log('  Amount B:', data.result.amountB);
+    console.log('  LP shares:', data.result.liquidity);
+    console.log('  💾 LP shares are now stored on-chain in STORAGE account metadata!');
 
     return {
       success: true,
-      amountA: amountADesired,
-      amountB: amountBDesired,
-      blockHash: blockHash || undefined,
+      amountA: data.result.amountA,
+      amountB: data.result.amountB,
     };
   } catch (error: any) {
     console.error('❌ Add liquidity error:', error);
@@ -781,77 +737,51 @@ export async function removeLiquidity(
   accountIndex: number = 0
 ): Promise<{ success: boolean; amountA?: string; amountB?: string; blockHash?: string; error?: string }> {
   try {
-    console.log('🔥 Removing liquidity...');
+    console.log('🔥 Removing liquidity via backend API...');
     console.log('  poolAddress:', poolAddress);
+    console.log('  tokenA:', tokenA);
+    console.log('  tokenB:', tokenB);
     console.log('  liquidityPercent:', liquidityPercent);
     console.log('  userShares:', userShares);
 
-    // Calculate liquidity amount to remove
+    // Calculate liquidity amount to remove (shares to burn)
     const sharesToBurn = (BigInt(userShares) * BigInt(liquidityPercent)) / 100n;
     console.log('  sharesToBurn:', sharesToBurn.toString());
 
-    // Create client from seed
-    const client = createKeetaClientFromSeed(seed, accountIndex);
-    const seedBytes = hexToBytes(seed);
-    const account = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
-    const userAddress = account.publicKeyString.get();
-
-    // Fetch pool reserves to calculate amounts
-    const pools = await fetchPools();
-    const pool = pools.find(p => p.poolAddress === poolAddress);
-
-    if (!pool) {
-      throw new Error('Pool not found');
-    }
-
-    const reserveA = BigInt(pool.reserveA);
-    const reserveB = BigInt(pool.reserveB);
-    const totalShares = BigInt(pool.totalShares || '1000000000000');
-
-    // Calculate amounts to receive (proportional to shares being burned)
-    const amountA = (sharesToBurn * reserveA) / totalShares;
-    const amountB = (sharesToBurn * reserveB) / totalShares;
-
-    console.log('  Calculated amountA:', amountA.toString());
-    console.log('  Calculated amountB:', amountB.toString());
-
-    // Build transaction
-    const builder = client.initBuilder();
-
-    const poolAccount = KeetaSDK.lib.Account.fromPublicKeyString(poolAddress);
-    const tokenAAccount = KeetaSDK.lib.Account.fromPublicKeyString(tokenA);
-    const tokenBAccount = KeetaSDK.lib.Account.fromPublicKeyString(tokenB);
-    const userAccount = KeetaSDK.lib.Account.fromPublicKeyString(userAddress);
-
-    // Pool sends tokens back to user (requires SEND_ON_BEHALF)
-    builder.send(userAccount, amountA, tokenAAccount, undefined, {
-      account: poolAccount,
-    });
-    builder.send(userAccount, amountB, tokenBAccount, undefined, {
-      account: poolAccount,
+    // Call backend API to remove liquidity
+    const response = await fetch('/api/liquidity/remove', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userSeed: seed,
+        tokenA,
+        tokenB,
+        liquidity: sharesToBurn.toString(),
+        amountAMin: '0',
+        amountBMin: '0',
+      }),
     });
 
-    // Publish transaction
-    console.log('📤 Publishing remove liquidity transaction...');
-    const result = await client.publishBuilder(builder);
-    console.log('✅ Transaction published:', result);
-
-    // Extract block hash (use second block - index 1)
-    let blockHash = null;
-    if (builder.blocks && builder.blocks.length > 1) {
-      const block = builder.blocks[1];
-      if (block && block.hash) {
-        blockHash = typeof block.hash === 'string'
-          ? block.hash.toUpperCase()
-          : block.hash.toString('hex').toUpperCase();
-      }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
     }
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Unknown error from backend');
+    }
+
+    console.log('✅ Liquidity removed successfully:', result);
 
     return {
       success: true,
-      amountA: (Number(amountA) / 1e9).toFixed(6),
-      amountB: (Number(amountB) / 1e9).toFixed(6),
-      blockHash: blockHash || undefined,
+      amountA: result.result?.amountA,
+      amountB: result.result?.amountB,
+      blockHash: result.result?.blockHash,
     };
   } catch (error: any) {
     console.error('❌ Remove liquidity error:', error);

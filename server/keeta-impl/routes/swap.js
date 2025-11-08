@@ -120,7 +120,7 @@ router.post('/execute', async (req, res) => {
       minAmountOutAtomic
     );
 
-    res.json({
+    const response = {
       success: true,
       result: {
         amountOut: result.amountOut.toString(),
@@ -130,7 +130,10 @@ router.post('/execute', async (req, res) => {
         newReserveB: result.newReserveB.toString(),
         blockHash: result.blockHash,
       },
-    });
+    };
+
+    console.log('📤 Swap API response:', JSON.stringify(response, null, 2));
+    res.json(response);
   } catch (error) {
     console.error('Swap execution error:', error);
     res.status(500).json({

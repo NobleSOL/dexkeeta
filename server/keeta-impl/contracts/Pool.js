@@ -7,6 +7,8 @@ import {
   accountFromAddress,
   fetchTokenDecimals,
   createLPStorageAccount,
+  updateLPMetadata,
+  readLPMetadata,
 } from '../utils/client.js';
 import {
   calculateSwapOutput,
@@ -39,7 +41,9 @@ export class Pool {
     this.creator = null; // Pool creator/owner (for simple architecture)
 
     // Multi-LP tracking
-    this.lpAccounts = new Map(); // userAddress => { lpStorageAddress, shares, amountA, amountB }
+    // SIMPLIFIED: Only track shares, calculate amounts from current reserves on-demand
+    // This prevents tracking drift when swaps change pool composition
+    this.lpAccounts = new Map(); // userAddress => { lpStorageAddress, shares }
     this.totalShares = 0n;
   }
 
@@ -62,6 +66,7 @@ export class Pool {
 
   /**
    * Load liquidity positions from JSON file
+   * SIMPLIFIED: Only loads shares, amounts calculated on-demand from current reserves
    */
   async loadLiquidityPositions() {
     try {
@@ -71,13 +76,12 @@ export class Pool {
       const positions = JSON.parse(data);
 
       // Convert positions object back to Map with BigInt values
+      // Only store shares - amounts will be calculated from current reserves
       this.lpAccounts = new Map();
       for (const [userAddress, position] of Object.entries(positions.positions || {})) {
         this.lpAccounts.set(userAddress, {
-          lpStorageAddress: position.lpStorageAddress,
+          lpStorageAddress: position.lpStorageAddress || null,
           shares: BigInt(position.shares),
-          amountA: BigInt(position.amountA),
-          amountB: BigInt(position.amountB),
         });
       }
 
@@ -91,6 +95,7 @@ export class Pool {
 
   /**
    * Save liquidity positions to JSON file
+   * SIMPLIFIED: Only saves shares, amounts calculated on-demand from current reserves
    */
   async saveLiquidityPositions() {
     const fs = await import('fs/promises');
@@ -105,8 +110,7 @@ export class Pool {
           {
             lpStorageAddress: pos.lpStorageAddress,
             shares: pos.shares.toString(),
-            amountA: pos.amountA.toString(),
-            amountB: pos.amountB.toString(),
+            // amountA and amountB removed - calculated from current reserves on-demand
           }
         ])
       )
@@ -229,7 +233,40 @@ export class Pool {
     }
 
     await userClient.publishBuilder(tx1Builder);
-    console.log(`✅ TX1 published: User sent ${amountInAfterFee} tokenIn to pool + ${feeAmount} fee`);
+
+    // Extract TX1 block hash from builder.blocks array
+    // This is the transaction where user sends tokens to pool (shown in explorer)
+    // Transaction structure:
+    // Block 0: User sends tokenIn to pool <- THIS ONE for explorer
+    // Block 1: User sends fee to treasury (if fee > 0)
+    let tx1Hash = null;
+    if (tx1Builder.blocks && tx1Builder.blocks.length > 0) {
+      // Use index 0 (first block) - the user sends tokenIn to pool
+      const block = tx1Builder.blocks[0];
+      console.log('📦 Block at index 0 (user->pool tokenIn):', {
+        hasHash: !!block?.hash,
+        hashType: block?.hash ? typeof block.hash : 'none',
+        totalBlocks: tx1Builder.blocks.length
+      });
+
+      if (block && block.hash) {
+        // Convert BlockHash to hex string
+        if (typeof block.hash === 'string') {
+          tx1Hash = block.hash.toUpperCase();
+        } else if (block.hash.toString) {
+          // Try toString first
+          const hashStr = block.hash.toString();
+          if (hashStr.match(/^[0-9A-Fa-f]+$/)) {
+            tx1Hash = hashStr.toUpperCase();
+          } else if (block.hash.toString('hex')) {
+            // If toString doesn't give hex, try toString('hex')
+            tx1Hash = block.hash.toString('hex').toUpperCase();
+          }
+        }
+      }
+    }
+
+    console.log(`✅ TX1 published (hash: ${tx1Hash || 'NOT_CAPTURED'}): User sent ${amountInAfterFee} tokenIn to pool + ${feeAmount} fee`);
 
     // Wait briefly for TX1 to be processed
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -246,8 +283,17 @@ export class Pool {
     });
 
     const tx2Block = await opsClient.publishBuilder(tx2Builder);
-    const tx2Hash = tx2Block?.hash?.toString() || tx2Block?.blockHash || 'unknown';
-    console.log(`✅ TX2 published: Pool sent ${amountOut} tokenOut to user`);
+    let tx2Hash = 'unknown';
+    if (tx2Block) {
+      if (tx2Block.hash) {
+        tx2Hash = typeof tx2Block.hash === 'string'
+          ? tx2Block.hash.toUpperCase()
+          : tx2Block.hash.toString('hex').toUpperCase();
+      } else if (tx2Block.blockHash) {
+        tx2Hash = tx2Block.blockHash.toUpperCase();
+      }
+    }
+    console.log(`✅ TX2 published (hash: ${tx2Hash}): Pool sent ${amountOut} tokenOut to user`);
 
     // Update reserves after swap
     await this.updateReserves();
@@ -255,7 +301,6 @@ export class Pool {
     // Log swap in explorer-style format and save to transaction history
     await this.logSwapTransaction(userAddress, tokenIn, tokenOut, amountIn, amountOut, priceImpact);
 
-    const tx1Hash = 'TX1_' + Date.now(); // Placeholder - TX1 hash not captured
     return {
       amountOut,
       feeAmount,
@@ -264,7 +309,7 @@ export class Pool {
       newReserveB: this.reserveB,
       tx1Hash,
       tx2Hash,
-      blockHash: tx2Hash, // For backwards compatibility
+      blockHash: tx1Hash, // Return TX1 hash for explorer link (shows user sending tokens)
     };
   }
 
@@ -393,8 +438,7 @@ export class Pool {
       existingLP = {
         lpStorageAddress: null, // Not used in pooled liquidity
         shares: 0n,
-        amountA: 0n,
-        amountB: 0n,
+        // amountA/amountB removed - calculated from current reserves on-demand
       };
     } else {
       console.log(`📊 Adding to existing position for ${userAddress.slice(0, 20)}...`);
@@ -443,17 +487,30 @@ export class Pool {
     // Execute transaction
     await userClient.publishBuilder(builder);
 
-    // Update position tracking
+    // Update position tracking (store shares on-chain in LP STORAGE account)
+    const newShares = existingLP.shares + shares;
+    let lpStorageAddress = existingLP.lpStorageAddress;
+
+    // Create LP storage account if this is a new position
+    if (!lpStorageAddress) {
+      console.log(`📝 Creating LP STORAGE account on-chain for ${userAddress.slice(0, 20)}...`);
+      lpStorageAddress = await createLPStorageAccount(userAddress, this.poolAddress, this.tokenA, this.tokenB);
+      console.log(`✅ LP STORAGE account created: ${lpStorageAddress}`);
+    }
+
+    // Update LP metadata on-chain with new share amount
+    await updateLPMetadata(lpStorageAddress, newShares, this.poolAddress, userAddress);
+
+    // Update local tracking (but source of truth is now on-chain)
     this.lpAccounts.set(userAddress, {
-      lpStorageAddress: null, // Not used in pooled liquidity
-      shares: existingLP.shares + shares,
-      amountA: existingLP.amountA + amountA,
-      amountB: existingLP.amountB + amountB,
+      lpStorageAddress,
+      shares: newShares,
+      // amountA/amountB removed - calculated from current reserves on-demand
     });
 
     this.totalShares += shares;
 
-    await this.saveLiquidityPositions();
+    await this.saveLiquidityPositions(); // Keep for backward compatibility, but on-chain is primary
     await this.updateReserves();
 
     console.log(`✅ Added liquidity: ${amountA} tokenA + ${amountB} tokenB → ${shares} shares`);
@@ -500,7 +557,7 @@ export class Pool {
     console.log(`   Burning ${liquidity} shares out of ${this.totalShares} total`);
     console.log(`   Pool reserves: ${this.reserveA} tokenA, ${this.reserveB} tokenB`);
     console.log(`   Calculated return: ${amountA} tokenA, ${amountB} tokenB`);
-    console.log(`   User's tracked position: ${position.amountA} tokenA, ${position.amountB} tokenB`);
+    console.log(`   Share percentage: ${(Number(liquidity) * 100 / Number(this.totalShares)).toFixed(4)}%`);
 
     // Check minimum amounts
     if (amountA < amountAMin) {
@@ -530,20 +587,31 @@ export class Pool {
     // Execute transaction
     await client.publishBuilder(builder);
 
-    // Update position tracking
+    // Update position tracking (decrement shares and update on-chain)
     position.shares -= liquidity;
-    position.amountA -= amountA;
-    position.amountB -= amountB;
+    // amountA/amountB no longer tracked - always calculated from current reserves
 
     if (position.shares === 0n) {
       this.lpAccounts.delete(userAddress);
+      console.log(`✅ User position fully removed`);
+
+      // Update on-chain metadata to show 0 shares
+      if (position.lpStorageAddress) {
+        await updateLPMetadata(position.lpStorageAddress, 0n, this.poolAddress, userAddress);
+      }
     } else {
       this.lpAccounts.set(userAddress, position);
+      console.log(`✅ User still has ${position.shares} shares remaining`);
+
+      // Update on-chain metadata with new share amount
+      if (position.lpStorageAddress) {
+        await updateLPMetadata(position.lpStorageAddress, position.shares, this.poolAddress, userAddress);
+      }
     }
 
     this.totalShares -= liquidity;
 
-    await this.saveLiquidityPositions();
+    await this.saveLiquidityPositions(); // Keep for backward compatibility
     await this.updateReserves();
 
     console.log(`✅ Removed liquidity: ${liquidity} shares → ${amountA} tokenA + ${amountB} tokenB`);

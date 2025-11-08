@@ -1,10 +1,11 @@
 import { defineConfig, Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import tsconfigPaths from "vite-tsconfig-paths";
 
 // https://vitejs.dev/config/
 export default defineConfig(async ({ mode }) => {
-  const plugins = [react()];
+  const plugins = [react(), tsconfigPaths()];
 
   // Only add express plugin in development mode
   // In production, the server is run separately via node-build.ts
@@ -15,7 +16,8 @@ export default defineConfig(async ({ mode }) => {
       name: "express-plugin",
       apply: "serve",
       async configureServer(server) {
-        const { createServer } = await eval('import("./server/index.js")');
+        const serverPath = path.resolve(__dirname, 'server/index.ts');
+        const { createServer } = await import(serverPath);
         const app = createServer();
         server.middlewares.use(app);
       },

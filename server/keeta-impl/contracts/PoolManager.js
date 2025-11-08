@@ -252,11 +252,10 @@ export class PoolManager {
     );
 
     console.log(`✅ Pool created at ${poolAddress}`);
-    console.log(`   OPS retains ownership (centralized liquidity model)`);
-    console.log(`   Creator: ${creatorAddress} (tracked for informational purposes)`);
+    console.log(`   Transferring ownership to creator: ${creatorAddress.slice(0, 20)}...`);
 
-    // REMOVED: transferPoolOwnership() - OPS keeps ownership for two-transaction swaps
-    // This allows OPS to publish TX2 using { account: poolAccount }
+    // Transfer ownership to creator while maintaining OPS SEND_ON_BEHALF permission
+    await this.transferPoolOwnership(poolAddress, creatorAddress, tokenA, tokenB);
 
     // Create and initialize pool instance
     const pool = new Pool(poolAddress, tokenA, tokenB);
@@ -426,13 +425,42 @@ export class PoolManager {
 
     for (const pool of this.pools.values()) {
       try {
-        // Check if user is the creator/owner of this pool (simple architecture)
-        if (pool.creator && pool.creator.toLowerCase() === userAddress.toLowerCase()) {
-          // User owns this pool - show entire pool liquidity as their position
-          console.log(`  Pool ${pool.poolAddress.slice(-8)}: USER IS OWNER - showing full pool liquidity`);
+        // Check if user has LP position in this pool (permissionless model)
+        // Look directly in the pool's lpAccounts Map
+        const lpPosition = pool.lpAccounts.get(userAddress);
+
+        if (lpPosition && lpPosition.shares > 0n) {
+          console.log(`  Pool ${pool.poolAddress.slice(-8)}: User has ${lpPosition.shares} shares`);
 
           const symbolA = await pool.getTokenSymbol(pool.tokenA);
           const symbolB = await pool.getTokenSymbol(pool.tokenB);
+
+          // Calculate share percentage
+          const sharePercent = pool.totalShares > 0n
+            ? Number((lpPosition.shares * 10000n) / pool.totalShares) / 100
+            : 0;
+
+          // Calculate amounts from shares and current reserves (dynamic calculation)
+          const { calculateAmountsForLPBurn } = await import('../utils/math.js');
+          const { amountA, amountB } = calculateAmountsForLPBurn(
+            lpPosition.shares,
+            pool.totalShares,
+            pool.reserveA,
+            pool.reserveB
+          );
+
+          // Get decimals for human-readable amounts
+          const { fetchTokenDecimals } = await import('../utils/client.js');
+          const decimalsA = await fetchTokenDecimals(pool.tokenA);
+          const decimalsB = await fetchTokenDecimals(pool.tokenB);
+
+          // Format amounts removing trailing zeros for better display
+          const amountANum = Number(amountA) / Math.pow(10, decimalsA);
+          const amountBNum = Number(amountB) / Math.pow(10, decimalsB);
+
+          // Use toFixed for precision, then parseFloat to remove trailing zeros
+          const amountAFormatted = parseFloat(amountANum.toFixed(Math.min(decimalsA, 6))).toString();
+          const amountBFormatted = parseFloat(amountBNum.toFixed(Math.min(decimalsB, 6))).toString();
 
           positions.push({
             poolAddress: pool.poolAddress,
@@ -440,34 +468,12 @@ export class PoolManager {
             tokenB: pool.tokenB,
             symbolA,
             symbolB,
-            liquidity: pool.reserveA.toString(), // Use reserveA as "liquidity" metric
-            sharePercent: 100, // Owner has 100% of pool
-            amountA: pool.reserveAHuman, // Full pool reserve A
-            amountB: pool.reserveBHuman, // Full pool reserve B
+            liquidity: lpPosition.shares.toString(),
+            sharePercent,
+            amountA: amountAFormatted,
+            amountB: amountBFormatted,
             timestamp: Date.now(),
           });
-        } else {
-          // Try complex architecture (LP storage accounts) - fallback
-          const position = await pool.getUserLPBalance(userAddress);
-
-          if (position && position.lpBalance && BigInt(position.lpBalance) > 0n) {
-            const symbolA = await pool.getTokenSymbol(pool.tokenA);
-            const symbolB = await pool.getTokenSymbol(pool.tokenB);
-
-            positions.push({
-              poolAddress: pool.poolAddress,
-              lpStorageAddress: position.lpStorageAddress,
-              tokenA: pool.tokenA,
-              tokenB: pool.tokenB,
-              symbolA,
-              symbolB,
-              liquidity: position.lpBalance,
-              sharePercent: position.sharePercent,
-              amountA: position.amountAHuman,
-              amountB: position.amountBHuman,
-              timestamp: Date.now(),
-            });
-          }
         }
       } catch (error) {
         console.error(`Error getting position for pool ${pool.poolAddress}:`, error.message);

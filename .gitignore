@@ -41,3 +41,9 @@ keeta/*.mjs
 test-*.mjs
 test-*.cjs
 diagnose-*.mjs
+
+# SEND_ON_BEHALF permission testing scripts
+test-send-on-behalf-permissions.mjs
+test-send-on-behalf-simple.mjs
+test-burner-can-swap.mjs
+test-real-swap-creator-pool.mjs

@@ -65,6 +65,8 @@ type KeetaPool = {
   reserveBHuman: number;
   price: string;
   totalShares: string;
+  decimalsA?: number;
+  decimalsB?: number;
 };
 
 type KeetaPosition = {
@@ -115,6 +117,9 @@ export default function KeetaDex() {
   // Remove liquidity state
   const [removeLiqPercent, setRemoveLiqPercent] = useState(100);
   const [removingLiq, setRemovingLiq] = useState(false);
+
+  // Tab state for controlled navigation
+  const [activeTab, setActiveTab] = useState("swap");
 
   // Toggle tokens function for liquidity/swap
   function toggleSwapTokens() {
@@ -433,11 +438,18 @@ export default function KeetaDex() {
 
       const result = await swapResponse.json();
 
+      console.log('🔍 Swap API result received:', JSON.stringify(result, null, 2));
+
       if (result.success) {
-        // Build explorer link using block hash
-        const explorerUrl = result.blockHash
-          ? `https://explorer.test.keeta.com/block/${result.blockHash}`
+        // Build explorer link using block hash from result.result.blockHash
+        const blockHash = result.result?.blockHash || result.blockHash;
+        console.log('🔍 Block hash extracted:', blockHash);
+
+        const explorerUrl = blockHash
+          ? `https://explorer.test.keeta.com/block/${blockHash}`
           : `https://explorer.test.keeta.com/account/${wallet.address}`;
+
+        console.log('🔍 Explorer URL built:', explorerUrl);
 
         toast({
           title: "Swap Successful!",
@@ -511,12 +523,26 @@ export default function KeetaDex() {
       if (data.success) {
         console.log('✅ Pool created with AMM logic and initial liquidity added');
 
+        // Build explorer link - use pool address to view the newly created pool
+        const poolAddress = data.result.poolAddress;
+        const explorerUrl = poolAddress
+          ? `https://explorer.test.keeta.com/account/${poolAddress}`
+          : `https://explorer.test.keeta.com/account/${wallet.address}`;
+
         toast({
           title: "Pool Created!",
           description: (
             <div className="space-y-1">
-              <div>Added initial liquidity: {data.result.amountA} + {data.result.amountB}</div>
-              <div className="text-sm text-gray-400">Pool has STORAGE account with swap functionality</div>
+              <div>Added initial liquidity: {liqAmountA} + {liqAmountB}</div>
+              <div className="text-sm text-gray-400">LP shares: {data.result.liquidity}</div>
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-400 hover:text-blue-300 underline block mt-1"
+              >
+                View Pool on Explorer →
+              </a>
             </div>
           ),
         });
@@ -556,9 +582,10 @@ export default function KeetaDex() {
       const pool = pools.find((p) => p.poolAddress === selectedPoolForLiq);
       if (!pool) return;
 
-      console.log('💧 Adding liquidity with client-side transaction signing...');
+      console.log('💧 Adding liquidity (calling keeta-client addLiquidity)...');
+      console.log('  Using decimals:', pool.decimalsA, pool.decimalsB);
 
-      // Execute add liquidity using client-side implementation
+      // Execute add liquidity - this calls the backend API which creates LP STORAGE accounts
       const result = await addLiquidityClient(
         wallet.seed,
         selectedPoolForLiq,
@@ -566,6 +593,8 @@ export default function KeetaDex() {
         pool.tokenB,
         liqAmountA,
         liqAmountB,
+        pool.decimalsA || 9,
+        pool.decimalsB || 9,
         wallet.accountIndex || 0
       );
 
@@ -991,38 +1020,34 @@ export default function KeetaDex() {
 
           {/* Right Column - Tabs */}
           <div className="lg:col-span-7">
-            <Tabs defaultValue="swap" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 mb-6 bg-card/60 border border-border/40">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-3 mb-6 bg-card/60 border border-border/40">
                 <TabsTrigger value="swap" className="text-xs sm:text-sm px-2 sm:px-4">
                   <ArrowRightLeft className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Swap</span>
                 </TabsTrigger>
                 <TabsTrigger value="pools" className="text-xs sm:text-sm px-2 sm:px-4">
-                  <TrendingUp className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Active Pools</span>
+                  <Droplets className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Pools</span>
                 </TabsTrigger>
                 <TabsTrigger value="liquidity" className="text-xs sm:text-sm px-2 sm:px-4">
                   <Plus className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Add Liquidity</span>
-                </TabsTrigger>
-                <TabsTrigger value="positions" className="text-xs sm:text-sm px-2 sm:px-4">
-                  <Droplets className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">My Positions</span>
+                  <span className="hidden sm:inline">Liquidity</span>
                 </TabsTrigger>
               </TabsList>
 
-              {/* Active Pools Tab */}
+              {/* Pools Tab */}
               <TabsContent value="pools">
                 <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
                   <CardHeader>
-                    <CardTitle>Active Pools</CardTitle>
-                    <CardDescription>Explore liquidity pools and start earning</CardDescription>
+                    <CardTitle>Liquidity Pools</CardTitle>
+                    <CardDescription>View all pools and manage your positions</CardDescription>
                   </CardHeader>
                   <CardContent className="overflow-visible">
                     {pools.length === 0 ? (
                       <div className="text-center py-12 text-muted-foreground">
-                        <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No active pools yet. Be the first to create one!</p>
+                        <Droplets className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No pools yet. Be the first to create one!</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
@@ -1043,8 +1068,8 @@ export default function KeetaDex() {
                             reserveB: pool.reserveB,
                             reserveAHuman: pool.reserveAHuman,
                             reserveBHuman: pool.reserveBHuman,
-                            decimalsA: 9, // Keeta default
-                            decimalsB: 9,
+                            decimalsA: pool.decimalsA || 9, // Use actual decimals from API, fallback to 9
+                            decimalsB: pool.decimalsB || 9,
                             totalShares: pool.totalShares,
                             userPosition: userPosition
                               ? {
@@ -1063,8 +1088,18 @@ export default function KeetaDex() {
                               onManage={(selectedPool) => {
                                 // Switch to liquidity tab and pre-select this pool
                                 setSelectedPoolForLiq(selectedPool.poolAddress);
-                                // Trigger tab change would need ref or state management
-                                // For now, user clicks the "Manage" button and we select the pool
+                                setCreateMode(false);
+                                setActiveTab("liquidity");
+                              }}
+                              onRemoveLiquidity={async (selectedPool, percent) => {
+                                // Find the position to pass to removeLiquidity
+                                const position = positions.find(
+                                  (p) => p.poolAddress === selectedPool.poolAddress
+                                );
+                                if (!position) return;
+
+                                setRemoveLiqPercent(percent);
+                                await removeLiquidity(position);
                               }}
                             />
                           );
@@ -1142,6 +1177,17 @@ export default function KeetaDex() {
                 <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">
                   <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
                     <span>You receive</span>
+                    {selectedPoolForSwap && wallet && (() => {
+                      const pool = pools.find((p) => p.poolAddress === selectedPoolForSwap);
+                      if (!pool) return null;
+                      const tokenOut = pool.tokenA === swapTokenIn ? pool.tokenB : pool.tokenA;
+                      const tokenOutBalance = wallet.tokens.find(t => t.address === tokenOut);
+                      return tokenOutBalance ? (
+                        <span>
+                          Bal: {tokenOutBalance.balanceFormatted}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                   <div className="flex items-center gap-3">
                     <select
@@ -1210,12 +1256,12 @@ export default function KeetaDex() {
             </Card>
           </TabsContent>
 
-          {/* Add Liquidity Tab */}
+          {/* Liquidity Tab */}
           <TabsContent value="liquidity">
             <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
               <CardHeader>
-                <CardTitle>Add Liquidity</CardTitle>
-                <CardDescription>Provide liquidity to Keeta pools and earn trading fees</CardDescription>
+                <CardTitle>Liquidity</CardTitle>
+                <CardDescription>Add liquidity to pools and earn trading fees</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Mode Toggle */}
@@ -1513,126 +1559,6 @@ export default function KeetaDex() {
                 })()}
               </CardContent>
             </Card>
-          </TabsContent>
-
-          {/* Positions Tab */}
-          <TabsContent value="positions">
-            <div className="space-y-4">
-              {positions.length === 0 ? (
-                <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
-                  <CardContent className="pt-6 text-center py-12">
-                    <Droplets className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-lg font-semibold mb-2">No Liquidity Positions</p>
-                    <p className="text-sm text-muted-foreground">
-                      Add liquidity to a pool to start earning fees
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                positions.map((position, idx) => (
-                  <div
-                    key={idx}
-                    className="rounded-xl border border-brand/30 bg-card/40 backdrop-blur p-4 transition-all hover:border-brand/50 hover:shadow-lg"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="space-y-1">
-                        <div className="font-semibold text-sm">
-                          {position.symbolA}/{position.symbolB}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Silverback Pool
-                        </div>
-                        {position.lpStorageAddress && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-emerald-400 font-medium">Your LP Account:</span>
-                            <code className="text-xs text-sky-400">
-                              {position.lpStorageAddress.slice(0, 8)}...{position.lpStorageAddress.slice(-6)}
-                            </code>
-                            <a
-                              href={`https://explorer.test.keeta.com/address/${position.lpStorageAddress}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sky-400 hover:text-sky-300 transition-colors"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                      <div className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                        You Own This
-                      </div>
-                    </div>
-
-                    {/* Position Details */}
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div className="rounded-lg border border-border/40 bg-secondary/40 p-2">
-                        <div className="text-xs text-muted-foreground mb-1">Your Position</div>
-                        <div className="text-xs font-semibold leading-tight">
-                          {position.amountA} {position.symbolA || ''}
-                        </div>
-                        <div className="text-xs font-semibold leading-tight">
-                          {position.amountB} {position.symbolB || ''}
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-border/40 bg-secondary/40 p-2">
-                        <div className="text-xs text-muted-foreground mb-1">Pool Share</div>
-                        <div className="text-xs font-semibold text-sky-400">
-                          {Number(position.sharePercent).toFixed(4)}%
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Remove Liquidity Controls */}
-                    <div className="rounded-lg border border-brand/40 bg-brand/10 p-3 mb-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-muted-foreground">Remove Liquidity</span>
-                        <span className="text-sm font-semibold text-sky-400">{removeLiqPercent}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={removeLiqPercent}
-                        onChange={(e) => setRemoveLiqPercent(Number(e.target.value))}
-                        className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-sky-400"
-                      />
-                      <div className="flex gap-1 mt-2">
-                        {[25, 50, 75, 100].map((percent) => (
-                          <Button
-                            key={percent}
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setRemoveLiqPercent(percent)}
-                            className="flex-1 text-xs h-7"
-                          >
-                            {percent}%
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Action Button */}
-                    <Button
-                      onClick={() => removeLiquidity(position)}
-                      disabled={removingLiq}
-                      variant="destructive"
-                      size="sm"
-                      className="w-full text-xs h-8"
-                    >
-                      {removingLiq ? (
-                        <>
-                          <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                          Removing...
-                        </>
-                      ) : (
-                        `Remove ${removeLiqPercent}% Liquidity`
-                      )}
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
           </TabsContent>
             </Tabs>
           </div>
