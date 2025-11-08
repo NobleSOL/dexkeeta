@@ -49,42 +49,47 @@ export class Pool {
 
   /**
    * Initialize pool by fetching reserves and token info
+   * Uses graceful degradation - starts with defaults if network fails
    */
   async initialize() {
-    try {
-      // Fetch token decimals with timeout
-      this.decimalsA = await Promise.race([
-        fetchTokenDecimals(this.tokenA),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-      ]);
-      this.decimalsB = await Promise.race([
-        fetchTokenDecimals(this.tokenB),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-      ]);
-    } catch (err) {
-      console.warn(`⚠️ Could not fetch token decimals for pool ${this.poolAddress.slice(-8)}: ${err.message}`);
-      // Use default decimals as fallback (most Keeta tokens use 9 decimals)
-      this.decimalsA = this.decimalsA || 9;
-      this.decimalsB = this.decimalsB || 9;
-    }
+    // Start with sensible defaults
+    this.decimalsA = 9; // Default for most Keeta tokens
+    this.decimalsB = 9;
+    this.reserveA = 0n;
+    this.reserveB = 0n;
 
-    // Fetch current reserves (also with timeout)
-    try {
-      await Promise.race([
-        this.updateReserves(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-      ]);
-    } catch (err) {
-      console.warn(`⚠️ Could not fetch reserves for pool ${this.poolAddress.slice(-8)}: ${err.message}`);
-      // Initialize with zero reserves as fallback
-      this.reserveA = this.reserveA || 0n;
-      this.reserveB = this.reserveB || 0n;
-    }
+    // Try to fetch real data, but don't block initialization
+    // This runs in background and updates values when available
+    this.fetchPoolDataInBackground();
 
     // Load liquidity positions from file (this doesn't require network)
     await this.loadLiquidityPositions();
 
     return this;
+  }
+
+  /**
+   * Fetch pool data in background without blocking initialization
+   */
+  async fetchPoolDataInBackground() {
+    try {
+      // Fetch token decimals
+      const [decimalsA, decimalsB] = await Promise.all([
+        fetchTokenDecimals(this.tokenA).catch(() => 9),
+        fetchTokenDecimals(this.tokenB).catch(() => 9),
+      ]);
+      this.decimalsA = decimalsA;
+      this.decimalsB = decimalsB;
+
+      // Fetch current reserves
+      await this.updateReserves().catch(err => {
+        console.warn(`⚠️ Could not fetch reserves for pool ${this.poolAddress.slice(-8)}: ${err.message}`);
+      });
+
+      console.log(`✅ Pool ${this.poolAddress.slice(-8)} data fetched successfully`);
+    } catch (err) {
+      console.warn(`⚠️ Background fetch failed for pool ${this.poolAddress.slice(-8)}: ${err.message}`);
+    }
   }
 
   /**
