@@ -19,8 +19,8 @@ async function main() {
     // Your wallet address
     const userAddress = 'keeta_aabuf556k7q465i3p6c7xdhirnems2rkgtorfn6j6wwic5iwlo7pjr4h7aolayi';
 
-    // KTA/WAVE pool - from .liquidity-positions-tzej2lvm.json
-    const ktaWavePool = 'keeta_athz5k3zcwdkhvbhkso3ac34uhanucgzhd2gn3tfhuahgzaljslostzej2lvm';
+    // KTA/WAVE pool - from current pools endpoint
+    const ktaWavePool = 'keeta_arwmubo5gxl7vzz3rulmcqyts7webl73zakb5d6hsm2khf3b5xsbil5m3bpek';
     const ktaWaveShares = '3162277660';
 
     console.log(`📦 Adding LP position for KTA/WAVE pool...`);
