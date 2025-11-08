@@ -57,13 +57,17 @@ export class Pool {
     this.decimalsB = 9;
     this.reserveA = 0n;
     this.reserveB = 0n;
+    this.lpAccounts = new Map();
+    this.totalShares = 0n;
 
     // Try to fetch real data, but don't block initialization
     // This runs in background and updates values when available
     this.fetchPoolDataInBackground();
 
-    // Load liquidity positions from file (this doesn't require network)
-    await this.loadLiquidityPositions();
+    // Load liquidity positions from file (this doesn't require network, but don't block)
+    this.loadLiquidityPositions().catch(err => {
+      console.warn(`⚠️ Could not load LP positions for pool ${this.poolAddress.slice(-8)}: ${err.message}`);
+    });
 
     return this;
   }
