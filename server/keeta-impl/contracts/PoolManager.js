@@ -488,11 +488,33 @@ export class PoolManager {
       for (const dbPos of dbPositions) {
         try {
           // Get the pool instance to access current reserves
-          const pool = this.getPool(dbPos.token_a, dbPos.token_b);
+          let pool = this.getPool(dbPos.token_a, dbPos.token_b);
 
+          // If pool not loaded yet, load it on-demand
           if (!pool) {
-            console.log(`  ⚠️ Pool not found for ${dbPos.pool_address.slice(-8)}`);
-            continue;
+            console.log(`  📥 Pool not loaded, loading on-demand: ${dbPos.pool_address.slice(-8)}`);
+            try {
+              const { Pool } = await import('./Pool.js');
+              pool = new Pool(
+                dbPos.pool_address,
+                dbPos.token_a,
+                dbPos.token_b,
+                this.opsClient,
+                this.repository
+              );
+
+              // Load pool state from blockchain
+              await pool.loadState();
+
+              // Store in manager for future use
+              const pairKey = getPairKey(dbPos.token_a, dbPos.token_b);
+              this.pools.set(pairKey, pool);
+
+              console.log(`  ✅ Pool loaded: ${dbPos.pool_address.slice(-8)}`);
+            } catch (loadError) {
+              console.error(`  ❌ Failed to load pool ${dbPos.pool_address.slice(-8)}:`, loadError.message);
+              continue;
+            }
           }
 
           const shares = BigInt(dbPos.shares);
