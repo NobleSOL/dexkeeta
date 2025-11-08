@@ -449,10 +449,9 @@ export class PoolManager {
             pool.reserveB
           );
 
-          // Get decimals for human-readable amounts
-          const { fetchTokenDecimals } = await import('../utils/client.js');
-          const decimalsA = await fetchTokenDecimals(pool.tokenA);
-          const decimalsB = await fetchTokenDecimals(pool.tokenB);
+          // Use cached decimals from pool object (fetched during pool initialization)
+          const decimalsA = pool.decimalsA;
+          const decimalsB = pool.decimalsB;
 
           // Format amounts removing trailing zeros for better display
           const amountANum = Number(amountA) / Math.pow(10, decimalsA);
