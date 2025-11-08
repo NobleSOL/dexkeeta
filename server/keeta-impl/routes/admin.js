@@ -314,4 +314,47 @@ router.post('/sync-lp-positions', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/admin/check-database
+ *
+ * Check what's actually in the PostgreSQL database (for debugging)
+ */
+router.get('/check-database', async (req, res) => {
+  try {
+    const repository = new PoolRepository();
+
+    // Check pools table
+    const pools = await repository.loadPools();
+    console.log(`Found ${pools.length} pools in database`);
+
+    // Check lp_positions table
+    const { getDbPool } = await import('../db/client.js');
+    const pool = getDbPool();
+    const lpResult = await pool.query('SELECT * FROM lp_positions ORDER BY created_at DESC');
+    console.log(`Found ${lpResult.rows.length} LP positions in database`);
+
+    res.json({
+      success: true,
+      pools: pools.map(p => ({
+        pool_address: p.pool_address,
+        token_a: p.token_a,
+        token_b: p.token_b,
+        creator: p.creator,
+      })),
+      lp_positions: lpResult.rows.map(lp => ({
+        pool_address: lp.pool_address,
+        user_address: lp.user_address,
+        shares: lp.shares,
+        created_at: lp.created_at,
+      })),
+    });
+  } catch (error) {
+    console.error('Database check error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;
