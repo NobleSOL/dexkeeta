@@ -6,8 +6,20 @@ import keetaRoutes from "./keeta-routes.ts";
 export function createServer() {
   const app = express();
 
+  // CORS configuration - Allow Vercel frontend and development
+  const corsOptions = {
+    origin: [
+      'https://dexkeeta.vercel.app',
+      'http://localhost:8080',
+      'http://localhost:3000',
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  };
+
   // Middleware
-  app.use(cors());
+  app.use(cors(corsOptions));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
