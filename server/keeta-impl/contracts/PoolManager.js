@@ -472,34 +472,49 @@ export class PoolManager {
 
   /**
    * Get user's LP position across all pools
-   * SIMPLE ARCHITECTURE: If user is pool creator, they own all liquidity
+   * Uses PostgreSQL database for persistent LP position tracking
    */
   async getUserPositions(userAddress) {
     const positions = [];
 
-    console.log(`📊 Checking positions for ${userAddress} across ${this.pools.size} pools`);
+    console.log(`📊 Checking positions for ${userAddress} from database`);
 
-    for (const pool of this.pools.values()) {
-      try {
-        // Check if user has LP position in this pool (permissionless model)
-        // Look directly in the pool's lpAccounts Map
-        const lpPosition = pool.lpAccounts.get(userAddress);
+    try {
+      // Query LP positions from PostgreSQL database
+      const dbPositions = await this.repository.getUserPositions(userAddress);
 
-        if (lpPosition && lpPosition.shares > 0n) {
-          console.log(`  Pool ${pool.poolAddress.slice(-8)}: User has ${lpPosition.shares} shares`);
+      console.log(`📋 Found ${dbPositions.length} positions in database`);
+
+      for (const dbPos of dbPositions) {
+        try {
+          // Get the pool instance to access current reserves
+          const pool = this.getPool(dbPos.token_a, dbPos.token_b);
+
+          if (!pool) {
+            console.log(`  ⚠️ Pool not found for ${dbPos.pool_address.slice(-8)}`);
+            continue;
+          }
+
+          const shares = BigInt(dbPos.shares);
+
+          if (shares <= 0n) {
+            continue;
+          }
+
+          console.log(`  Pool ${pool.poolAddress.slice(-8)}: User has ${shares} shares`);
 
           const symbolA = await pool.getTokenSymbol(pool.tokenA);
           const symbolB = await pool.getTokenSymbol(pool.tokenB);
 
           // Calculate share percentage
           const sharePercent = pool.totalShares > 0n
-            ? Number((lpPosition.shares * 10000n) / pool.totalShares) / 100
+            ? Number((shares * 10000n) / pool.totalShares) / 100
             : 0;
 
           // Calculate amounts from shares and current reserves (dynamic calculation)
           const { calculateAmountsForLPBurn } = await import('../utils/math.js');
           const { amountA, amountB } = calculateAmountsForLPBurn(
-            lpPosition.shares,
+            shares,
             pool.totalShares,
             pool.reserveA,
             pool.reserveB
@@ -523,17 +538,20 @@ export class PoolManager {
             tokenB: pool.tokenB,
             symbolA,
             symbolB,
-            liquidity: lpPosition.shares.toString(),
+            liquidity: shares.toString(),
             sharePercent,
             amountA: amountAFormatted,
             amountB: amountBFormatted,
             timestamp: Date.now(),
           });
+        } catch (error) {
+          console.error(`Error processing position for pool ${dbPos.pool_address}:`, error.message);
+          // Continue to next position instead of failing completely
         }
-      } catch (error) {
-        console.error(`Error getting position for pool ${pool.poolAddress}:`, error.message);
-        // Continue to next pool instead of failing completely
       }
+    } catch (error) {
+      console.error(`Error querying user positions from database:`, error.message);
+      // Return empty array on database error
     }
 
     console.log(`✅ Found ${positions.length} positions with liquidity`);
