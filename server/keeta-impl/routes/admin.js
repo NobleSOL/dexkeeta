@@ -3,6 +3,7 @@ import express from 'express';
 import { getOpsAccount, accountFromAddress, KeetaNet, createUserClient } from '../utils/client.js';
 import { getPoolManager } from '../contracts/PoolManager.js';
 import { PoolRepository } from '../db/pool-repository.js';
+import { initializeDatabase } from '../db/client.js';
 
 const router = express.Router();
 
@@ -228,6 +229,33 @@ router.post('/fix-ride-pool-storage-permissions', async (req, res) => {
     });
   } catch (error) {
     console.error('\n❌ Permission grant failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/admin/init-database
+ *
+ * Initialize PostgreSQL database schema (tables, indexes, triggers)
+ * Safe to run multiple times - uses IF NOT EXISTS
+ */
+router.post('/init-database', async (req, res) => {
+  try {
+    console.log('📊 Initializing PostgreSQL database schema...\n');
+
+    await initializeDatabase();
+
+    console.log('✅ Database initialized successfully!\n');
+
+    res.json({
+      success: true,
+      message: 'Database schema initialized',
+    });
+  } catch (error) {
+    console.error('\n❌ Database initialization failed:', error);
     res.status(500).json({
       success: false,
       error: error.message,
