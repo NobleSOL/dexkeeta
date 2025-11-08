@@ -2,6 +2,7 @@
 import { Pool } from './Pool.js';
 import { createStorageAccount } from '../utils/client.js';
 import { getPairKey } from '../utils/constants.js';
+import { PoolRepository } from '../db/pool-repository.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -13,7 +14,8 @@ export class PoolManager {
   constructor() {
     this.pools = new Map(); // pairKey -> Pool instance
     this.poolAddresses = new Map(); // pairKey -> pool address
-    this.persistencePath = '.pools.json'; // Store pool addresses
+    this.repository = new PoolRepository(); // PostgreSQL repository
+    this.persistencePath = '.pools.json'; // Legacy file storage (fallback)
   }
 
   /**
@@ -31,9 +33,40 @@ export class PoolManager {
   }
 
   /**
-   * Load pool addresses from persistent storage
+   * Load pool addresses from PostgreSQL database
    */
   async loadPools() {
+    try {
+      const poolData = await this.repository.loadPools();
+
+      for (const row of poolData) {
+        const pairKey = getPairKey(row.token_a, row.token_b);
+        this.poolAddresses.set(pairKey, row.pool_address);
+
+        // Initialize pool instance with LP token address if available
+        const pool = new Pool(
+          row.pool_address,
+          row.token_a,
+          row.token_b,
+          row.lp_token_address || null
+        );
+        pool.creator = row.creator || null; // Set creator/owner
+        await pool.initialize();
+        this.pools.set(pairKey, pool);
+
+        console.log(`📦 Loaded pool: ${pairKey} at ${row.pool_address}`);
+      }
+    } catch (err) {
+      console.error('⚠️ Could not load pools from database:', err.message);
+      // Fallback to file-based storage if database fails
+      await this.loadPoolsFromFile();
+    }
+  }
+
+  /**
+   * Fallback: Load pool addresses from legacy .pools.json file
+   */
+  async loadPoolsFromFile() {
     try {
       const data = await fs.readFile(this.persistencePath, 'utf8');
       const poolData = JSON.parse(data);
@@ -52,18 +85,35 @@ export class PoolManager {
         await pool.initialize();
         this.pools.set(pairKey, pool);
 
-        console.log(`📦 Loaded pool: ${pairKey} at ${poolInfo.address}`)
-;
+        console.log(`📦 Loaded pool from file: ${pairKey} at ${poolInfo.address}`);
       }
     } catch (err) {
       if (err.code !== 'ENOENT') {
-        console.warn('⚠️ Could not load pools:', err.message);
+        console.warn('⚠️ Could not load pools from file:', err.message);
       }
     }
   }
 
   /**
-   * Save pool addresses to persistent storage
+   * Save single pool to PostgreSQL database
+   */
+  async savePool(pool) {
+    try {
+      await this.repository.savePool({
+        poolAddress: pool.poolAddress,
+        tokenA: pool.tokenA,
+        tokenB: pool.tokenB,
+        lpTokenAddress: pool.lpTokenAddress,
+        creator: pool.creator || null,
+      });
+    } catch (err) {
+      console.error('⚠️ Could not save pool to database:', err.message);
+      throw err;
+    }
+  }
+
+  /**
+   * Legacy: Save pool addresses to .pools.json file
    */
   async savePools() {
     const poolData = {};
@@ -163,8 +213,14 @@ export class PoolManager {
 
       if (discovered > 0) {
         console.log(`🎉 Discovered ${discovered} new pools on-chain`);
-        // Save discovered pools to persistent storage
-        await this.savePools();
+        // Save discovered pools to database
+        for (const pool of this.pools.values()) {
+          try {
+            await this.savePool(pool);
+          } catch (err) {
+            console.warn(`⚠️ Failed to save pool ${pool.poolAddress}:`, err.message);
+          }
+        }
       } else {
         console.log('✓ No new pools discovered');
       }
@@ -266,8 +322,8 @@ export class PoolManager {
     this.pools.set(pairKey, pool);
     this.poolAddresses.set(pairKey, poolAddress);
 
-    // Persist to storage
-    await this.savePools();
+    // Persist to database
+    await this.savePool(pool);
 
     return pool;
   }
