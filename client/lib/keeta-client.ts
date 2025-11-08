@@ -576,8 +576,9 @@ export async function addLiquidity(
     console.log('  decimalsB:', decimalsB);
 
     // Call backend API which handles LP STORAGE account creation and on-chain tracking
-    console.log('📡 Calling fetch to /api/liquidity/add...');
-    const response = await fetch('/api/liquidity/add', {
+    const API_BASE = import.meta.env.VITE_KEETA_API_BASE || `${window.location.origin}/api`;
+    console.log('📡 Calling fetch to', `${API_BASE}/liquidity/add...`);
+    const response = await fetch(`${API_BASE}/liquidity/add`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -750,7 +751,8 @@ export async function removeLiquidity(
     console.log('  sharesToBurn:', sharesToBurn.toString());
 
     // Call backend API to remove liquidity
-    const response = await fetch('/api/liquidity/remove', {
+    const API_BASE = import.meta.env.VITE_KEETA_API_BASE || `${window.location.origin}/api`;
+    const response = await fetch(`${API_BASE}/liquidity/remove`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
