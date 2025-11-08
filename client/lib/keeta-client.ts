@@ -327,8 +327,9 @@ export async function fetchLiquidityPositions(seed: string, accountIndex: number
     const userAddress = getAddressFromSeed(seed, accountIndex);
     console.log('📍 User address:', userAddress);
 
-    // Call backend API to get positions
-    const response = await fetch(`/api/liquidity/positions/${userAddress}`);
+    // Call backend API to get positions (use absolute URL for Vercel frontend + Render backend)
+    const API_BASE = import.meta.env.VITE_KEETA_API_BASE || `${window.location.origin}/api`;
+    const response = await fetch(`${API_BASE}/liquidity/positions/${userAddress}`);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch positions: ${response.statusText}`);
