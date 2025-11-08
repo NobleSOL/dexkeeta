@@ -23,8 +23,8 @@ export class PoolManager {
     await this.loadPools();
 
     // Discover pools on-chain (in case persistent storage was lost)
-    // TEMPORARILY DISABLED to allow creating fresh pools
-    // await this.discoverPoolsOnChain();
+    // This ensures pools survive server restarts/redeployments
+    await this.discoverPoolsOnChain();
 
     console.log(`✅ PoolManager initialized with ${this.pools.size} pools`);
     return this;
