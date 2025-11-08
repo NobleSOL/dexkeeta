@@ -56,8 +56,9 @@ export function KeetaPoolCard({
 
   // User's position
   const hasPosition = pool.userPosition && pool.userPosition.sharePercent > 0;
-  const userAmountA = hasPosition ? parseFloat(pool.userPosition!.amountA) / Math.pow(10, pool.decimalsA || 9) : 0;
-  const userAmountB = hasPosition ? parseFloat(pool.userPosition!.amountB) / Math.pow(10, pool.decimalsB || 9) : 0;
+  // amountA and amountB are already human-readable strings from the API (e.g., "1.008974")
+  const userAmountA = hasPosition ? parseFloat(pool.userPosition!.amountA) : 0;
+  const userAmountB = hasPosition ? parseFloat(pool.userPosition!.amountB) : 0;
 
   // Estimated fee earnings (protocol fee goes to treasury, but LPs earn from price impact)
   const estimatedDailyVolume = reserveAHuman * 0.1;

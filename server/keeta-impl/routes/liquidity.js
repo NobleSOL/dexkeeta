@@ -8,6 +8,18 @@ import { fetchTokenDecimals, createUserClient } from '../utils/client.js';
 const router = express.Router();
 
 /**
+ * Convert atomic bigint amount to human-readable string
+ * @param {bigint} atomicAmount - Amount in atomic units
+ * @param {number} decimals - Token decimals
+ * @returns {string} Human-readable amount (e.g., "1.008974")
+ */
+function toHumanReadable(atomicAmount, decimals) {
+  const amountNum = Number(atomicAmount) / Math.pow(10, decimals);
+  // Use toFixed for precision, then parseFloat to remove trailing zeros
+  return parseFloat(amountNum.toFixed(Math.min(decimals, 6))).toString();
+}
+
+/**
  * POST /api/liquidity/add
  * Add liquidity to a pool (permissionless - requires user seed)
  *
@@ -77,11 +89,11 @@ router.post('/add', async (req, res) => {
       success: true,
       userAddress,
       result: {
-        amountA: result.amountA.toString(),
-        amountB: result.amountB.toString(),
+        amountA: toHumanReadable(result.amountA, decimalsA),
+        amountB: toHumanReadable(result.amountB, decimalsB),
         liquidity: result.liquidity.toString(),
-        newReserveA: result.newReserveA.toString(),
-        newReserveB: result.newReserveB.toString(),
+        newReserveA: toHumanReadable(result.newReserveA, decimalsA),
+        newReserveB: toHumanReadable(result.newReserveB, decimalsB),
       },
     });
   } catch (error) {
@@ -150,10 +162,10 @@ router.post('/remove', async (req, res) => {
       success: true,
       userAddress,
       result: {
-        amountA: result.amountA.toString(),
-        amountB: result.amountB.toString(),
-        newReserveA: result.newReserveA.toString(),
-        newReserveB: result.newReserveB.toString(),
+        amountA: toHumanReadable(result.amountA, decimalsA),
+        amountB: toHumanReadable(result.amountB, decimalsB),
+        newReserveA: toHumanReadable(result.newReserveA, decimalsA),
+        newReserveB: toHumanReadable(result.newReserveB, decimalsB),
       },
     });
   } catch (error) {
