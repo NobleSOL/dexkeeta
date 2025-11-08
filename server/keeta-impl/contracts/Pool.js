@@ -51,14 +51,37 @@ export class Pool {
    * Initialize pool by fetching reserves and token info
    */
   async initialize() {
-    // Fetch token decimals
-    this.decimalsA = await fetchTokenDecimals(this.tokenA);
-    this.decimalsB = await fetchTokenDecimals(this.tokenB);
+    try {
+      // Fetch token decimals with timeout
+      this.decimalsA = await Promise.race([
+        fetchTokenDecimals(this.tokenA),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+      ]);
+      this.decimalsB = await Promise.race([
+        fetchTokenDecimals(this.tokenB),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+      ]);
+    } catch (err) {
+      console.warn(`⚠️ Could not fetch token decimals for pool ${this.poolAddress.slice(-8)}: ${err.message}`);
+      // Use default decimals as fallback (most Keeta tokens use 9 decimals)
+      this.decimalsA = this.decimalsA || 9;
+      this.decimalsB = this.decimalsB || 9;
+    }
 
-    // Fetch current reserves
-    await this.updateReserves();
+    // Fetch current reserves (also with timeout)
+    try {
+      await Promise.race([
+        this.updateReserves(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+      ]);
+    } catch (err) {
+      console.warn(`⚠️ Could not fetch reserves for pool ${this.poolAddress.slice(-8)}: ${err.message}`);
+      // Initialize with zero reserves as fallback
+      this.reserveA = this.reserveA || 0n;
+      this.reserveB = this.reserveB || 0n;
+    }
 
-    // Load liquidity positions from file
+    // Load liquidity positions from file (this doesn't require network)
     await this.loadLiquidityPositions();
 
     return this;
