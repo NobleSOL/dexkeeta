@@ -53,17 +53,13 @@ export function createUserClient(seedHex, accountIndex = 0) {
 
 /**
  * Get the treasury account (for fee collection)
- * If TREASURY_SEED is not set, defaults to OPS_SEED (treasury = ops)
+ * Hardcoded treasury address to avoid seed derivation index mismatch
  */
 export function getTreasuryAccount() {
   if (!treasuryAccount) {
-    // Try TREASURY_SEED first, fallback to OPS_SEED if not set
-    const treasurySeedHex = process.env.TREASURY_SEED || process.env.OPS_SEED;
-    if (!treasurySeedHex) {
-      throw new Error('Either TREASURY_SEED or OPS_SEED must be set');
-    }
-    const treasurySeed = Buffer.from(treasurySeedHex.trim(), 'hex');
-    treasuryAccount = KeetaNet.lib.Account.fromSeed(treasurySeed, 0);
+    // Hardcoded treasury address (avoids index derivation issues)
+    const TREASURY_ADDRESS = 'keeta_aabtozgfunwwvwdztv54y6l5x57q2g3254shgp27zjltr2xz3pyo7q4tjtmsamy';
+    treasuryAccount = accountFromAddress(TREASURY_ADDRESS);
     console.log('✅ Treasury account loaded:', treasuryAccount.publicKeyString.get());
   }
   return treasuryAccount;
@@ -186,10 +182,12 @@ export async function getTokenBalance(accountAddress, tokenAddress) {
  * Ops has SEND_ON_BEHALF (can route swaps)
  *
  * @param {string} userAddress - User's address who will own this LP account
- * @param {string} poolIdentifier - Pool identifier (e.g., "KTA_RIDE")
+ * @param {string} poolIdentifier - Pool address
+ * @param {string} tokenA - Token A address
+ * @param {string} tokenB - Token B address
  * @returns {Promise<string>} LP storage account address
  */
-export async function createLPStorageAccount(userAddress, poolIdentifier) {
+export async function createLPStorageAccount(userAddress, poolIdentifier, tokenA, tokenB) {
   const client = await getOpsClient();
   const ops = getOpsAccount();
 
@@ -204,10 +202,17 @@ export async function createLPStorageAccount(userAddress, poolIdentifier) {
   const storageAccount = pending.account;
   const storageAddress = storageAccount.publicKeyString.toString();
 
-  // Set storage info
-  // Name must be uppercase only, no lowercase letters or numbers
-  const poolShort = poolIdentifier.slice(-8).toUpperCase().replace(/[^A-Z]/g, '');
-  const userShort = userAddress.slice(-8).toUpperCase().replace(/[^A-Z]/g, '');
+  // Fetch token symbols for human-readable description
+  let symbolA = 'TOKENA';
+  let symbolB = 'TOKENB';
+  try {
+    const metadataA = await fetchTokenMetadata(tokenA);
+    const metadataB = await fetchTokenMetadata(tokenB);
+    symbolA = metadataA.symbol;
+    symbolB = metadataB.symbol;
+  } catch (err) {
+    console.warn(`⚠️ Could not fetch token symbols, using defaults`);
+  }
 
   // Metadata must be base64 encoded
   const metadataObj = {
@@ -219,8 +224,8 @@ export async function createLPStorageAccount(userAddress, poolIdentifier) {
 
   builder.setInfo(
     {
-      name: `LP_${poolShort}_${userShort}`,
-      description: `Liquidity position for ${poolIdentifier} owned by ${userAddress.slice(0, 20)}...`,
+      name: `SB_LP`,
+      description: `Liquidity pool for ${symbolA}/${symbolB}`,
       metadata: metadataBase64,
       defaultPermission: new KeetaNet.lib.Permissions([
         'ACCESS',
@@ -262,12 +267,13 @@ export async function createLPStorageAccount(userAddress, poolIdentifier) {
       { account: storageAccount }
     );
 
-    // Grant SEND_ON_BEHALF to ops (for routing swaps)
+    // Grant SEND_ON_BEHALF and UPDATE_INFO to ops (for routing swaps and updating metadata)
     builder.updatePermissions(
       ops,
       new KeetaNet.lib.Permissions([
         'SEND_ON_BEHALF',
         'STORAGE_DEPOSIT',
+        'UPDATE_INFO', // Allow ops to update metadata with shares
       ]),
       undefined,
       undefined,
@@ -377,6 +383,120 @@ export async function createStorageAccount(name, description, isPool = false) {
  */
 export function accountFromAddress(address) {
   return KeetaNet.lib.Account.fromPublicKeyString(address);
+}
+
+/**
+ * Update LP position metadata in STORAGE account
+ * Stores shares on-chain for transparent, verifiable LP tracking
+ *
+ * @param {string} lpStorageAddress - LP STORAGE account address
+ * @param {bigint} shares - LP shares amount
+ * @param {string} poolAddress - Pool address
+ * @param {string} userAddress - User's address (owner)
+ */
+export async function updateLPMetadata(lpStorageAddress, shares, poolAddress, userAddress) {
+  const client = await getOpsClient();
+  const ops = getOpsAccount();
+  const builder = client.initBuilder();
+
+  const lpAccount = accountFromAddress(lpStorageAddress);
+
+  // Create metadata object with shares and pool info
+  const metadataObj = {
+    pool: poolAddress,
+    owner: userAddress,
+    shares: shares.toString(), // Store as string to preserve precision
+    updatedAt: Date.now()
+  };
+  const metadataBase64 = Buffer.from(JSON.stringify(metadataObj)).toString('base64');
+
+  // First get existing account info to preserve name and description
+  const accountsInfo = await client.client.getAccountsInfo([lpStorageAddress]);
+  const existingInfo = accountsInfo[lpStorageAddress]?.info;
+
+  // Update storage account info with new metadata (preserve existing name/description)
+  // For identifier accounts, ALL fields are required: name, description, metadata, defaultPermission
+  builder.setInfo(
+    {
+      name: existingInfo?.name || 'SB_LP',
+      description: existingInfo?.description || 'Silverback LP',
+      metadata: metadataBase64,
+      defaultPermission: new KeetaNet.lib.Permissions([
+        'ACCESS',
+        'STORAGE_CAN_HOLD',
+      ]),
+    },
+    { account: lpAccount }
+  );
+
+  await client.publishBuilder(builder);
+
+  console.log(`✅ Updated LP metadata on-chain: ${shares} shares`);
+}
+
+/**
+ * Read LP position metadata from STORAGE account
+ *
+ * @param {string} lpStorageAddress - LP STORAGE account address
+ * @returns {Promise<{ shares: bigint, pool: string, owner: string } | null>}
+ */
+export async function readLPMetadata(lpStorageAddress) {
+  try {
+    const client = await getOpsClient();
+
+    // Use getAccountsInfo (plural) which takes an array
+    const accountsInfo = await client.client.getAccountsInfo([lpStorageAddress]);
+    const info = accountsInfo[lpStorageAddress];
+
+    if (!info?.info?.metadata) {
+      return null;
+    }
+
+    // Decode base64 metadata
+    const metadataJson = Buffer.from(info.info.metadata, 'base64').toString('utf8');
+    const metadata = JSON.parse(metadataJson);
+
+    return {
+      shares: BigInt(metadata.shares),
+      pool: metadata.pool,
+      owner: metadata.owner,
+      updatedAt: metadata.updatedAt
+    };
+  } catch (err) {
+    console.warn(`⚠️ Could not read LP metadata from ${lpStorageAddress}:`, err.message);
+    return null;
+  }
+}
+
+/**
+ * Get all LP storage accounts for a specific pool
+ * Scans for STORAGE accounts with LP naming pattern
+ *
+ * @param {string} poolAddress - Pool address
+ * @returns {Promise<Array<{ address: string, shares: bigint, owner: string }>>}
+ */
+export async function getLPPositionsForPool(poolAddress) {
+  const client = await getOpsClient();
+  const positions = [];
+
+  try {
+    // Use the pool's last 8 characters to find matching LP accounts
+    const poolShort = poolAddress.slice(-8).toUpperCase().replace(/[^A-Z]/g, '');
+
+    // In production, we'd query the blockchain for accounts matching the pattern LP_{poolShort}_*
+    // For now, we return the positions stored in the pool's internal tracking
+    // This is a simplified approach - full implementation would require blockchain indexing
+
+    console.log(`📊 Scanning for LP positions for pool ${poolAddress.slice(-8)}...`);
+
+    // TODO: Implement blockchain scanning for accounts matching pattern
+    // For now, we rely on the pool's internal lpAccounts Map which gets migrated to on-chain
+
+    return positions;
+  } catch (err) {
+    console.error(`❌ Error scanning LP positions:`, err.message);
+    return [];
+  }
 }
 
 export { KeetaNet };
