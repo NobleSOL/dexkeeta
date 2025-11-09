@@ -461,12 +461,32 @@ export class PoolManager {
     amountAMin = 0n,
     amountBMin = 0n
   ) {
-    const pool = this.getPool(tokenA, tokenB);
-    
-    if (!pool) {
-      throw new Error(`No pool found for ${tokenA} / ${tokenB}`);
+    let pool = this.getPool(tokenA, tokenB);
+
+    // If pool not loaded or doesn't have repository, load from database
+    if (!pool || !pool.repository) {
+      const pairKey = getPairKey(tokenA, tokenB);
+      const poolData = await this.repository.getPoolByTokens(tokenA, tokenB);
+
+      if (!poolData) {
+        throw new Error(`No pool found for ${tokenA} / ${tokenB}`);
+      }
+
+      console.log(`📥 Loading pool on-demand for remove liquidity: ${poolData.pool_address.slice(-8)}`);
+
+      const { Pool } = await import('./Pool.js');
+      pool = new Pool(
+        poolData.pool_address,
+        tokenA,
+        tokenB,
+        this.opsClient,
+        this.repository
+      );
+
+      await pool.loadState();
+      this.pools.set(pairKey, pool);
     }
-    
+
     return await pool.removeLiquidity(userAddress, liquidity, amountAMin, amountBMin);
   }
 
