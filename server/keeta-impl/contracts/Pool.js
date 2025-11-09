@@ -30,7 +30,7 @@ import { CONFIG, toAtomic, fromAtomic } from '../utils/constants.js';
  * - Permissionless: users control their own funds
  */
 export class Pool {
-  constructor(poolAddress, tokenA, tokenB) {
+  constructor(poolAddress, tokenA, tokenB, opsClient = null, repository = null) {
     this.poolAddress = poolAddress; // Pool coordinator address
     this.tokenA = tokenA; // Token address
     this.tokenB = tokenB; // Token address
@@ -45,6 +45,10 @@ export class Pool {
     // This prevents tracking drift when swaps change pool composition
     this.lpAccounts = new Map(); // userAddress => { lpStorageAddress, shares }
     this.totalShares = 0n;
+
+    // Database repository for LP positions (PostgreSQL source of truth)
+    this.repository = repository;
+    this.opsClient = opsClient;
   }
 
   /**
@@ -569,27 +573,55 @@ export class Pool {
    */
   async removeLiquidity(userAddress, liquidity, amountAMin = 0n, amountBMin = 0n) {
     await this.updateReserves();
-    await this.loadLiquidityPositions();
 
-    // Get user's position
-    const position = this.lpAccounts.get(userAddress);
-    if (!position || position.shares < liquidity) {
-      throw new Error(`Insufficient shares: have ${position?.shares || 0n}, need ${liquidity}`);
+    // Get user's shares from database (PostgreSQL is source of truth)
+    let userShares = 0n;
+    let totalShares = 0n;
+
+    if (this.repository) {
+      // Load from PostgreSQL database
+      const allPoolPositions = await this.repository.getLPPositions(this.poolAddress);
+      const userPosition = allPoolPositions.find(pos => pos.user_address === userAddress);
+
+      if (userPosition) {
+        userShares = BigInt(userPosition.shares);
+      }
+
+      // Calculate total shares from all LP positions
+      totalShares = allPoolPositions.reduce(
+        (sum, pos) => sum + BigInt(pos.shares),
+        0n
+      );
+
+      console.log(`📊 LP shares from database: user=${userShares}, total=${totalShares}`);
+    } else {
+      // Fallback to local file system (legacy)
+      await this.loadLiquidityPositions();
+      const position = this.lpAccounts.get(userAddress);
+      userShares = position?.shares || 0n;
+      totalShares = this.totalShares;
+
+      console.log(`📁 LP shares from file: user=${userShares}, total=${totalShares}`);
+    }
+
+    // Check if user has enough shares
+    if (userShares < liquidity) {
+      throw new Error(`Insufficient shares: have ${userShares}, need ${liquidity}`);
     }
 
     // Calculate amounts to return
     const { amountA, amountB } = calculateAmountsForLPBurn(
       liquidity,
-      this.totalShares,
+      totalShares,
       this.reserveA,
       this.reserveB
     );
 
     console.log(`🔍 Removing liquidity calculation:`);
-    console.log(`   Burning ${liquidity} shares out of ${this.totalShares} total`);
+    console.log(`   Burning ${liquidity} shares out of ${totalShares} total`);
     console.log(`   Pool reserves: ${this.reserveA} tokenA, ${this.reserveB} tokenB`);
     console.log(`   Calculated return: ${amountA} tokenA, ${amountB} tokenB`);
-    console.log(`   Share percentage: ${(Number(liquidity) * 100 / Number(this.totalShares)).toFixed(4)}%`);
+    console.log(`   Share percentage: ${(Number(liquidity) * 100 / Number(totalShares)).toFixed(4)}%`);
 
     // Check minimum amounts
     if (amountA < amountAMin) {
@@ -619,31 +651,32 @@ export class Pool {
     // Execute transaction
     await client.publishBuilder(builder);
 
-    // Update position tracking (decrement shares and update on-chain)
-    position.shares -= liquidity;
-    // amountA/amountB no longer tracked - always calculated from current reserves
+    // Update position tracking in database
+    const newShares = userShares - liquidity;
 
-    if (position.shares === 0n) {
-      this.lpAccounts.delete(userAddress);
-      console.log(`✅ User position fully removed`);
-
-      // Update on-chain metadata to show 0 shares
-      if (position.lpStorageAddress) {
-        await updateLPMetadata(position.lpStorageAddress, 0n, this.poolAddress, userAddress);
-      }
+    if (this.repository) {
+      // Update PostgreSQL database
+      await this.repository.saveLPPosition(this.poolAddress, userAddress, newShares);
+      console.log(`✅ Database updated: ${newShares} shares remaining for ${userAddress.slice(0, 20)}...`);
     } else {
-      this.lpAccounts.set(userAddress, position);
-      console.log(`✅ User still has ${position.shares} shares remaining`);
+      // Legacy file-based storage
+      const position = this.lpAccounts.get(userAddress);
+      if (position) {
+        position.shares -= liquidity;
 
-      // Update on-chain metadata with new share amount
-      if (position.lpStorageAddress) {
-        await updateLPMetadata(position.lpStorageAddress, position.shares, this.poolAddress, userAddress);
+        if (position.shares === 0n) {
+          this.lpAccounts.delete(userAddress);
+          console.log(`✅ User position fully removed`);
+        } else {
+          this.lpAccounts.set(userAddress, position);
+          console.log(`✅ User still has ${position.shares} shares remaining`);
+        }
       }
+
+      this.totalShares -= liquidity;
+      await this.saveLiquidityPositions();
     }
 
-    this.totalShares -= liquidity;
-
-    await this.saveLiquidityPositions(); // Keep for backward compatibility
     await this.updateReserves();
 
     console.log(`✅ Removed liquidity: ${liquidity} shares → ${amountA} tokenA + ${amountB} tokenB`);
