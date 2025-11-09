@@ -466,7 +466,7 @@ export class PoolManager {
     // If pool not loaded or doesn't have repository, load from database
     if (!pool || !pool.repository) {
       const pairKey = getPairKey(tokenA, tokenB);
-      const poolData = await this.repository.getPoolByTokens(tokenA, tokenB);
+      const poolData = await this.repository.getPoolByPairKey(tokenA, tokenB);
 
       if (!poolData) {
         throw new Error(`No pool found for ${tokenA} / ${tokenB}`);
