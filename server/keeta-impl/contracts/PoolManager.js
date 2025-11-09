@@ -483,7 +483,7 @@ export class PoolManager {
         this.repository
       );
 
-      await pool.loadState();
+      await pool.initialize();
       this.pools.set(pairKey, pool);
     }
 
