@@ -237,6 +237,131 @@ router.post('/fix-ride-pool-storage-permissions', async (req, res) => {
 });
 
 /**
+ * POST /api/admin/fix-kta-wave-pool-storage-permissions
+ *
+ * Fix permissions for KTA/WAVE pool token storage accounts
+ * Grants OPS wallet SEND_ON_BEHALF and ACCESS on token storage within the pool
+ *
+ * Body: { walletSeed: string }
+ */
+router.post('/fix-kta-wave-pool-storage-permissions', async (req, res) => {
+  try {
+    const { walletSeed } = req.body;
+
+    if (!walletSeed) {
+      return res.status(400).json({
+        success: false,
+        error: 'walletSeed is required',
+      });
+    }
+
+    const KTA_WAVE_POOL = 'keeta_arwmubo5gxl7vzz3rulmcqyts7webl73zakb5d6hsm2khf3b5xsbil5m3bpek';
+    const KTA_TOKEN = 'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52';
+    const WAVE_TOKEN = 'keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym';
+
+    console.log('🔧 Fixing KTA/WAVE Pool Storage Permissions\\n');
+
+    // Create user client
+    const { client: creatorClient, address: creatorAddress } = createUserClient(walletSeed);
+    const ops = getOpsAccount();
+
+    console.log(`👤 Creator: ${creatorAddress}`);
+    console.log(`🤖 OPS: ${ops.publicKeyString.get()}\\n`);
+    console.log(`📦 Pool: ${KTA_WAVE_POOL}`);
+    console.log(`🪙 KTA: ${KTA_TOKEN}`);
+    console.log(`🪙 WAVE: ${WAVE_TOKEN}\\n`);
+
+    const results = [];
+
+    // Grant permissions on the pool account itself
+    console.log('1️⃣ Granting permissions on pool account...');
+    try {
+      const poolAccount = accountFromAddress(KTA_WAVE_POOL);
+      const builder1 = creatorClient.initBuilder();
+
+      builder1.updatePermissions(
+        ops,
+        new KeetaNet.lib.Permissions(['SEND_ON_BEHALF', 'STORAGE_DEPOSIT', 'ACCESS']),
+        undefined,
+        undefined,
+        { account: poolAccount }
+      );
+
+      console.log('   🚀 Publishing...');
+      await creatorClient.publishBuilder(builder1);
+      console.log('   ✅ Pool account permissions granted\\n');
+      results.push({ target: 'pool_account', success: true });
+    } catch (err) {
+      console.error('   ❌ Error:', err.message);
+      results.push({ target: 'pool_account', success: false, error: err.message });
+    }
+
+    // Grant permissions on KTA token storage within pool
+    console.log('2️⃣ Granting permissions on KTA token storage...');
+    try {
+      const ktaStoragePath = `${KTA_WAVE_POOL}/${KTA_TOKEN}`;
+      const ktaStorageAccount = accountFromAddress(ktaStoragePath);
+      const builder2 = creatorClient.initBuilder();
+
+      builder2.updatePermissions(
+        ops,
+        new KeetaNet.lib.Permissions(['SEND_ON_BEHALF', 'ACCESS']),
+        undefined,
+        undefined,
+        { account: ktaStorageAccount }
+      );
+
+      console.log('   🚀 Publishing...');
+      await creatorClient.publishBuilder(builder2);
+      console.log('   ✅ KTA storage permissions granted\\n');
+      results.push({ target: 'kta_storage', success: true });
+    } catch (err) {
+      console.error('   ❌ Error:', err.message);
+      results.push({ target: 'kta_storage', success: false, error: err.message });
+    }
+
+    // Grant permissions on WAVE token storage within pool
+    console.log('3️⃣ Granting permissions on WAVE token storage...');
+    try {
+      const waveStoragePath = `${KTA_WAVE_POOL}/${WAVE_TOKEN}`;
+      const waveStorageAccount = accountFromAddress(waveStoragePath);
+      const builder3 = creatorClient.initBuilder();
+
+      builder3.updatePermissions(
+        ops,
+        new KeetaNet.lib.Permissions(['SEND_ON_BEHALF', 'ACCESS']),
+        undefined,
+        undefined,
+        { account: waveStorageAccount }
+      );
+
+      console.log('   🚀 Publishing...');
+      await creatorClient.publishBuilder(builder3);
+      console.log('   ✅ WAVE storage permissions granted\\n');
+      results.push({ target: 'wave_storage', success: true });
+    } catch (err) {
+      console.error('   ❌ Error:', err.message);
+      results.push({ target: 'wave_storage', success: false, error: err.message });
+    }
+
+    console.log('✅ All permissions granted successfully!');
+    console.log('🎉 KTA/WAVE pool is now ready for remove liquidity operations\\n');
+
+    res.json({
+      success: true,
+      message: 'KTA/WAVE pool permissions fixed',
+      results,
+    });
+  } catch (error) {
+    console.error('\\n❌ Permission grant failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
  * POST /api/admin/init-database
  *
  * Initialize PostgreSQL database schema (tables, indexes, triggers)
