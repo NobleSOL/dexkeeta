@@ -528,16 +528,26 @@ export class PoolManager {
           const symbolA = await pool.getTokenSymbol(pool.tokenA);
           const symbolB = await pool.getTokenSymbol(pool.tokenB);
 
+          // Calculate totalShares from database (sum all LP positions for this pool)
+          // This is necessary because pool.totalShares may be 0 if loaded on-demand
+          const allPoolPositions = await this.repository.getLPPositions(dbPos.pool_address);
+          const totalShares = allPoolPositions.reduce(
+            (sum, pos) => sum + BigInt(pos.shares),
+            0n
+          );
+
+          console.log(`  Total shares in pool: ${totalShares} (calculated from ${allPoolPositions.length} positions)`);
+
           // Calculate share percentage
-          const sharePercent = pool.totalShares > 0n
-            ? Number((shares * 10000n) / pool.totalShares) / 100
+          const sharePercent = totalShares > 0n
+            ? Number((shares * 10000n) / totalShares) / 100
             : 0;
 
           // Calculate amounts from shares and current reserves (dynamic calculation)
           const { calculateAmountsForLPBurn } = await import('../utils/math.js');
           const { amountA, amountB } = calculateAmountsForLPBurn(
             shares,
-            pool.totalShares,
+            totalShares,
             pool.reserveA,
             pool.reserveB
           );
