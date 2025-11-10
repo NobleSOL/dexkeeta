@@ -44,17 +44,27 @@ export default function Index() {
 
   // Fetch USD prices from Dexscreener for any token
   const ETH_SENTINEL = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+  const WETH_ADDRESS = "0x4200000000000000000000000000000000000006"; // Base WETH
 
   const tokenAddresses = useMemo(() => {
     const addresses: string[] = [];
-    if (fromToken.address && fromToken.address !== ETH_SENTINEL) {
+
+    // For fromToken: use WETH address if it's ETH, otherwise use token address
+    if (fromToken.symbol.toUpperCase() === "ETH") {
+      addresses.push(WETH_ADDRESS);
+    } else if (fromToken.address && fromToken.address !== ETH_SENTINEL) {
       addresses.push(fromToken.address);
     }
-    if (toToken.address && toToken.address !== ETH_SENTINEL) {
+
+    // For toToken: use WETH address if it's ETH, otherwise use token address
+    if (toToken.symbol.toUpperCase() === "ETH") {
+      addresses.push(WETH_ADDRESS);
+    } else if (toToken.address && toToken.address !== ETH_SENTINEL) {
       addresses.push(toToken.address);
     }
+
     return addresses;
-  }, [fromToken.address, toToken.address]);
+  }, [fromToken.address, fromToken.symbol, toToken.address, toToken.symbol]);
 
   const { data: dexscreenerData } = useDexscreenerTokenStats(tokenAddresses);
 
@@ -375,22 +385,38 @@ export default function Index() {
 
   // Calculate USD values for input amounts
   const fromUsdValue = useMemo(() => {
-    if (!dexscreenerData || !fromToken.address) return undefined;
-    const tokenData = dexscreenerData[fromToken.address.toLowerCase()];
+    if (!dexscreenerData) return undefined;
+
+    // For ETH, use WETH price
+    const lookupAddress = fromToken.symbol.toUpperCase() === "ETH"
+      ? WETH_ADDRESS.toLowerCase()
+      : fromToken.address?.toLowerCase();
+
+    if (!lookupAddress) return undefined;
+
+    const tokenData = dexscreenerData[lookupAddress];
     const price = tokenData?.priceUsd;
     const amount = Number(fromAmount);
     if (!price || !amount || !Number.isFinite(amount)) return undefined;
     return formatUSD(price * amount);
-  }, [fromAmount, fromToken.address, dexscreenerData]);
+  }, [fromAmount, fromToken.address, fromToken.symbol, dexscreenerData]);
 
   const toUsdValue = useMemo(() => {
-    if (!dexscreenerData || !toToken.address) return undefined;
-    const tokenData = dexscreenerData[toToken.address.toLowerCase()];
+    if (!dexscreenerData) return undefined;
+
+    // For ETH, use WETH price
+    const lookupAddress = toToken.symbol.toUpperCase() === "ETH"
+      ? WETH_ADDRESS.toLowerCase()
+      : toToken.address?.toLowerCase();
+
+    if (!lookupAddress) return undefined;
+
+    const tokenData = dexscreenerData[lookupAddress];
     const price = tokenData?.priceUsd;
     const amount = Number(toAmount);
     if (!price || !amount || !Number.isFinite(amount)) return undefined;
     return formatUSD(price * amount);
-  }, [toAmount, toToken.address, dexscreenerData]);
+  }, [toAmount, toToken.address, toToken.symbol, dexscreenerData]);
 
   // Get price impact styling and warning level
   const getPriceImpactInfo = (impact: number | undefined) => {

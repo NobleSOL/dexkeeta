@@ -97,14 +97,23 @@ export default function Pool() {
   // Fetch USD prices from Dexscreener for any token
   const tokenAddresses = useMemo(() => {
     const addresses: string[] = [];
-    if (tokenA.address && tokenA.address !== ETH_SENTINEL) {
+
+    // For tokenA: use WETH address if it's ETH, otherwise use token address
+    if (tokenA.symbol.toUpperCase() === "ETH") {
+      addresses.push(WETH_ADDRESS);
+    } else if (tokenA.address && tokenA.address !== ETH_SENTINEL) {
       addresses.push(tokenA.address);
     }
-    if (tokenB.address && tokenB.address !== ETH_SENTINEL) {
+
+    // For tokenB: use WETH address if it's ETH, otherwise use token address
+    if (tokenB.symbol.toUpperCase() === "ETH") {
+      addresses.push(WETH_ADDRESS);
+    } else if (tokenB.address && tokenB.address !== ETH_SENTINEL) {
       addresses.push(tokenB.address);
     }
+
     return addresses;
-  }, [tokenA.address, tokenB.address]);
+  }, [tokenA.address, tokenA.symbol, tokenB.address, tokenB.symbol]);
 
   const { data: dexscreenerData } = useDexscreenerTokenStats(tokenAddresses);
 
@@ -152,22 +161,38 @@ export default function Pool() {
 
   // Calculate USD values for input amounts
   const usdValueA = useMemo(() => {
-    if (!dexscreenerData || !tokenA.address) return undefined;
-    const tokenData = dexscreenerData[tokenA.address.toLowerCase()];
+    if (!dexscreenerData) return undefined;
+
+    // For ETH, use WETH price
+    const lookupAddress = tokenA.symbol.toUpperCase() === "ETH"
+      ? WETH_ADDRESS.toLowerCase()
+      : tokenA.address?.toLowerCase();
+
+    if (!lookupAddress) return undefined;
+
+    const tokenData = dexscreenerData[lookupAddress];
     const price = tokenData?.priceUsd;
     const amount = Number(amtA);
     if (!price || !amount || !Number.isFinite(amount)) return undefined;
     return formatUSD(price * amount);
-  }, [amtA, tokenA.address, dexscreenerData]);
+  }, [amtA, tokenA.address, tokenA.symbol, dexscreenerData]);
 
   const usdValueB = useMemo(() => {
-    if (!dexscreenerData || !tokenB.address) return undefined;
-    const tokenData = dexscreenerData[tokenB.address.toLowerCase()];
+    if (!dexscreenerData) return undefined;
+
+    // For ETH, use WETH price
+    const lookupAddress = tokenB.symbol.toUpperCase() === "ETH"
+      ? WETH_ADDRESS.toLowerCase()
+      : tokenB.address?.toLowerCase();
+
+    if (!lookupAddress) return undefined;
+
+    const tokenData = dexscreenerData[lookupAddress];
     const price = tokenData?.priceUsd;
     const amount = Number(amtB);
     if (!price || !amount || !Number.isFinite(amount)) return undefined;
     return formatUSD(price * amount);
-  }, [amtB, tokenB.address, dexscreenerData]);
+  }, [amtB, tokenB.address, tokenB.symbol, dexscreenerData]);
 
   const cta = (() => {
     if (!isConnected)
