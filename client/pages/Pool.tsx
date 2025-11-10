@@ -19,7 +19,8 @@ import { toast } from "@/hooks/use-toast";
 import { base } from "viem/chains";
 import { ActivePoolsList } from "@/components/pool/ActivePoolsList";
 import type { PoolCardData } from "@/components/pool/ActivePoolCard";
-import { getMultipleTokenPrices, formatUSD } from "@/lib/pricing";
+import { useDexscreenerTokenStats } from "@/hooks/useDexscreener";
+import { formatUSD } from "@/lib/pricing";
 
 // WETH address on Base (Sepolia and Mainnet use same address)
 const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
@@ -92,7 +93,21 @@ export default function Pool() {
   const [refetchTrigger, setRefetchTrigger] = useState(0);
   const [lpBalance, setLpBalance] = useState<bigint | null>(null);
   const [lpTotalSupply, setLpTotalSupply] = useState<bigint | null>(null);
-  const [tokenPrices, setTokenPrices] = useState<Record<string, number | null>>({});
+
+  // Fetch USD prices from Dexscreener for any token
+  const tokenAddresses = useMemo(() => {
+    const addresses: string[] = [];
+    if (tokenA.address && tokenA.address !== ETH_SENTINEL) {
+      addresses.push(tokenA.address);
+    }
+    if (tokenB.address && tokenB.address !== ETH_SENTINEL) {
+      addresses.push(tokenB.address);
+    }
+    return addresses;
+  }, [tokenA.address, tokenB.address]);
+
+  const { data: dexscreenerData } = useDexscreenerTokenStats(tokenAddresses);
+
   const [slippage, setSlippage] = useState<number>(() => {
     const v =
       typeof window !== "undefined"
@@ -114,25 +129,6 @@ export default function Pool() {
     return () =>
       document.removeEventListener("sb:slippage-updated", handler as any);
   }, []);
-
-  // Fetch USD prices for selected tokens
-  useEffect(() => {
-    let cancel = false;
-    async function fetchPrices() {
-      try {
-        const prices = await getMultipleTokenPrices([tokenA.symbol, tokenB.symbol]);
-        if (!cancel) {
-          setTokenPrices(prices);
-        }
-      } catch (error) {
-        console.warn("Failed to fetch token prices:", error);
-      }
-    }
-    fetchPrices();
-    return () => {
-      cancel = true;
-    };
-  }, [tokenA.symbol, tokenB.symbol]);
 
   const { address, isConnected } = useAccount();
   const { connectors, connect } = useConnect();
@@ -156,18 +152,22 @@ export default function Pool() {
 
   // Calculate USD values for input amounts
   const usdValueA = useMemo(() => {
-    const price = tokenPrices[tokenA.symbol.toUpperCase()];
+    if (!dexscreenerData || !tokenA.address) return undefined;
+    const tokenData = dexscreenerData[tokenA.address.toLowerCase()];
+    const price = tokenData?.priceUsd;
     const amount = Number(amtA);
     if (!price || !amount || !Number.isFinite(amount)) return undefined;
     return formatUSD(price * amount);
-  }, [amtA, tokenA.symbol, tokenPrices]);
+  }, [amtA, tokenA.address, dexscreenerData]);
 
   const usdValueB = useMemo(() => {
-    const price = tokenPrices[tokenB.symbol.toUpperCase()];
+    if (!dexscreenerData || !tokenB.address) return undefined;
+    const tokenData = dexscreenerData[tokenB.address.toLowerCase()];
+    const price = tokenData?.priceUsd;
     const amount = Number(amtB);
     if (!price || !amount || !Number.isFinite(amount)) return undefined;
     return formatUSD(price * amount);
-  }, [amtB, tokenB.symbol, tokenPrices]);
+  }, [amtB, tokenB.address, dexscreenerData]);
 
   const cta = (() => {
     if (!isConnected)

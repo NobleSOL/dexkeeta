@@ -17,7 +17,8 @@ import { formatUnits } from "viem";
 import { base } from "viem/chains";
 import { executeSwapViaOpenOcean, executeSwapViaSilverbackV2, executeSwapDirectlyViaOpenOcean, unifiedRouterAddress } from "@/aggregator/execute";
 import { toast } from "@/hooks/use-toast";
-import { getMultipleTokenPrices, formatUSD } from "@/lib/pricing";
+import { useDexscreenerTokenStats } from "@/hooks/useDexscreener";
+import { formatUSD } from "@/lib/pricing";
 
 const TOKENS: Token[] = ["ETH", "USDC", "SBCK", "WBTC", "KTA"].map((sym) => ({
   ...tokenBySymbol(sym),
@@ -40,7 +41,22 @@ export default function Index() {
 
   const [fromBalance, setFromBalance] = useState<number | undefined>(undefined);
   const [toBalance, setToBalance] = useState<number | undefined>(undefined);
-  const [tokenPrices, setTokenPrices] = useState<Record<string, number | null>>({});
+
+  // Fetch USD prices from Dexscreener for any token
+  const ETH_SENTINEL = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+  const tokenAddresses = useMemo(() => {
+    const addresses: string[] = [];
+    if (fromToken.address && fromToken.address !== ETH_SENTINEL) {
+      addresses.push(fromToken.address);
+    }
+    if (toToken.address && toToken.address !== ETH_SENTINEL) {
+      addresses.push(toToken.address);
+    }
+    return addresses;
+  }, [fromToken.address, toToken.address]);
+
+  const { data: dexscreenerData } = useDexscreenerTokenStats(tokenAddresses);
 
   const canSwap = useMemo(() => {
     const a = Number(fromAmount);
@@ -306,25 +322,6 @@ export default function Index() {
       document.removeEventListener("sb:slippage-updated", handler as any);
   }, []);
 
-  // Fetch USD prices for selected tokens
-  useEffect(() => {
-    let cancel = false;
-    async function fetchPrices() {
-      try {
-        const prices = await getMultipleTokenPrices([fromToken.symbol, toToken.symbol]);
-        if (!cancel) {
-          setTokenPrices(prices);
-        }
-      } catch (error) {
-        console.warn("Failed to fetch token prices:", error);
-      }
-    }
-    fetchPrices();
-    return () => {
-      cancel = true;
-    };
-  }, [fromToken.symbol, toToken.symbol]);
-
   // Fetch balances for selected tokens
   useEffect(() => {
     let cancel = false;
@@ -378,18 +375,22 @@ export default function Index() {
 
   // Calculate USD values for input amounts
   const fromUsdValue = useMemo(() => {
-    const price = tokenPrices[fromToken.symbol.toUpperCase()];
+    if (!dexscreenerData || !fromToken.address) return undefined;
+    const tokenData = dexscreenerData[fromToken.address.toLowerCase()];
+    const price = tokenData?.priceUsd;
     const amount = Number(fromAmount);
     if (!price || !amount || !Number.isFinite(amount)) return undefined;
     return formatUSD(price * amount);
-  }, [fromAmount, fromToken.symbol, tokenPrices]);
+  }, [fromAmount, fromToken.address, dexscreenerData]);
 
   const toUsdValue = useMemo(() => {
-    const price = tokenPrices[toToken.symbol.toUpperCase()];
+    if (!dexscreenerData || !toToken.address) return undefined;
+    const tokenData = dexscreenerData[toToken.address.toLowerCase()];
+    const price = tokenData?.priceUsd;
     const amount = Number(toAmount);
     if (!price || !amount || !Number.isFinite(amount)) return undefined;
     return formatUSD(price * amount);
-  }, [toAmount, toToken.symbol, tokenPrices]);
+  }, [toAmount, toToken.address, dexscreenerData]);
 
   // Get price impact styling and warning level
   const getPriceImpactInfo = (impact: number | undefined) => {
