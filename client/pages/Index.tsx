@@ -17,6 +17,7 @@ import { formatUnits } from "viem";
 import { base } from "viem/chains";
 import { executeSwapViaOpenOcean, executeSwapViaSilverbackV2, executeSwapDirectlyViaOpenOcean, unifiedRouterAddress } from "@/aggregator/execute";
 import { toast } from "@/hooks/use-toast";
+import { getMultipleTokenPrices, formatUSD } from "@/lib/pricing";
 
 const TOKENS: Token[] = ["ETH", "USDC", "SBCK", "WBTC", "KTA"].map((sym) => ({
   ...tokenBySymbol(sym),
@@ -39,6 +40,7 @@ export default function Index() {
 
   const [fromBalance, setFromBalance] = useState<number | undefined>(undefined);
   const [toBalance, setToBalance] = useState<number | undefined>(undefined);
+  const [tokenPrices, setTokenPrices] = useState<Record<string, number | null>>({});
 
   const canSwap = useMemo(() => {
     const a = Number(fromAmount);
@@ -304,6 +306,25 @@ export default function Index() {
       document.removeEventListener("sb:slippage-updated", handler as any);
   }, []);
 
+  // Fetch USD prices for selected tokens
+  useEffect(() => {
+    let cancel = false;
+    async function fetchPrices() {
+      try {
+        const prices = await getMultipleTokenPrices([fromToken.symbol, toToken.symbol]);
+        if (!cancel) {
+          setTokenPrices(prices);
+        }
+      } catch (error) {
+        console.warn("Failed to fetch token prices:", error);
+      }
+    }
+    fetchPrices();
+    return () => {
+      cancel = true;
+    };
+  }, [fromToken.symbol, toToken.symbol]);
+
   // Fetch balances for selected tokens
   useEffect(() => {
     let cancel = false;
@@ -354,6 +375,21 @@ export default function Index() {
     setFromAmount(toAmount);
     setToAmount(fromAmount);
   };
+
+  // Calculate USD values for input amounts
+  const fromUsdValue = useMemo(() => {
+    const price = tokenPrices[fromToken.symbol.toUpperCase()];
+    const amount = Number(fromAmount);
+    if (!price || !amount || !Number.isFinite(amount)) return undefined;
+    return formatUSD(price * amount);
+  }, [fromAmount, fromToken.symbol, tokenPrices]);
+
+  const toUsdValue = useMemo(() => {
+    const price = tokenPrices[toToken.symbol.toUpperCase()];
+    const amount = Number(toAmount);
+    if (!price || !amount || !Number.isFinite(amount)) return undefined;
+    return formatUSD(price * amount);
+  }, [toAmount, toToken.symbol, tokenPrices]);
 
   // Get price impact styling and warning level
   const getPriceImpactInfo = (impact: number | undefined) => {
@@ -656,6 +692,7 @@ export default function Index() {
                   onAmountChange={setFromAmount}
                   onTokenClick={() => setSelecting("from")}
                   balance={fromBalance}
+                  usdValue={fromUsdValue}
                 />
 
                 <div className="flex items-center justify-center py-1">
@@ -677,8 +714,24 @@ export default function Index() {
                   onTokenClick={() => setSelecting("to")}
                   balance={toBalance}
                   disabled
+                  usdValue={toUsdValue}
                 />
               </div>
+
+              {/* Quote Error Banner - Show prominently above price details */}
+              {quoteError && fromAmount && (
+                <div className="mt-4 rounded-xl border border-red-400/40 bg-red-400/10 p-3 text-sm">
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-400 text-lg">⚠️</span>
+                    <div>
+                      <div className="font-semibold text-red-400">Unable to Calculate Swap</div>
+                      <div className="text-xs text-red-300/80 mt-1">
+                        {quoteError}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-4 rounded-xl border border-border/60 bg-secondary/60 p-4 text-sm">
                 <div className="flex items-center justify-between">
@@ -728,11 +781,6 @@ export default function Index() {
                         </>
                       )}
                     </span>
-                  </div>
-                )}
-                {quoteError && (
-                  <div className="mt-2 text-xs text-red-400 break-words">
-                    {quoteError}
                   </div>
                 )}
               </div>

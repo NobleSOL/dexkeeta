@@ -19,6 +19,7 @@ import { toast } from "@/hooks/use-toast";
 import { base } from "viem/chains";
 import { ActivePoolsList } from "@/components/pool/ActivePoolsList";
 import type { PoolCardData } from "@/components/pool/ActivePoolCard";
+import { getMultipleTokenPrices, formatUSD } from "@/lib/pricing";
 
 // WETH address on Base (Sepolia and Mainnet use same address)
 const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
@@ -91,6 +92,7 @@ export default function Pool() {
   const [refetchTrigger, setRefetchTrigger] = useState(0);
   const [lpBalance, setLpBalance] = useState<bigint | null>(null);
   const [lpTotalSupply, setLpTotalSupply] = useState<bigint | null>(null);
+  const [tokenPrices, setTokenPrices] = useState<Record<string, number | null>>({});
   const [slippage, setSlippage] = useState<number>(() => {
     const v =
       typeof window !== "undefined"
@@ -113,6 +115,25 @@ export default function Pool() {
       document.removeEventListener("sb:slippage-updated", handler as any);
   }, []);
 
+  // Fetch USD prices for selected tokens
+  useEffect(() => {
+    let cancel = false;
+    async function fetchPrices() {
+      try {
+        const prices = await getMultipleTokenPrices([tokenA.symbol, tokenB.symbol]);
+        if (!cancel) {
+          setTokenPrices(prices);
+        }
+      } catch (error) {
+        console.warn("Failed to fetch token prices:", error);
+      }
+    }
+    fetchPrices();
+    return () => {
+      cancel = true;
+    };
+  }, [tokenA.symbol, tokenB.symbol]);
+
   const { address, isConnected } = useAccount();
   const { connectors, connect } = useConnect();
   const publicClient = usePublicClient();
@@ -132,6 +153,21 @@ export default function Pool() {
       return a > 0 && b > 0 && tokenA.symbol !== tokenB.symbol;
     return a > 0 || b > 0; // for remove, one input can drive percentage or amounts
   }, [amtA, amtB, mode, tokenA.symbol, tokenB.symbol]);
+
+  // Calculate USD values for input amounts
+  const usdValueA = useMemo(() => {
+    const price = tokenPrices[tokenA.symbol.toUpperCase()];
+    const amount = Number(amtA);
+    if (!price || !amount || !Number.isFinite(amount)) return undefined;
+    return formatUSD(price * amount);
+  }, [amtA, tokenA.symbol, tokenPrices]);
+
+  const usdValueB = useMemo(() => {
+    const price = tokenPrices[tokenB.symbol.toUpperCase()];
+    const amount = Number(amtB);
+    if (!price || !amount || !Number.isFinite(amount)) return undefined;
+    return formatUSD(price * amount);
+  }, [amtB, tokenB.symbol, tokenPrices]);
 
   const cta = (() => {
     if (!isConnected)
@@ -841,6 +877,7 @@ export default function Pool() {
                   }}
                   onTokenClick={() => setSelecting("A")}
                   balance={balA}
+                  usdValue={usdValueA}
                 />
                 <div className="flex items-center justify-center py-1">
                   <Button
@@ -862,6 +899,7 @@ export default function Pool() {
                   }}
                   onTokenClick={() => setSelecting("B")}
                   balance={balB}
+                  usdValue={usdValueB}
                 />
               </>
             ) : (

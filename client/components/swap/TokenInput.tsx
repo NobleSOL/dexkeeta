@@ -20,6 +20,7 @@ export function TokenInput({
   onTokenClick,
   balance,
   disabled,
+  usdValue,
 }: {
   label: string;
   token: Token;
@@ -28,6 +29,7 @@ export function TokenInput({
   onTokenClick: () => void;
   balance?: number;
   disabled?: boolean;
+  usdValue?: string;
 }) {
   const formattedBalance = useMemo(() => {
     if (balance == null) return "";
@@ -54,17 +56,24 @@ export function TokenInput({
           </div>
           <ChevronDown className="opacity-70" />
         </Button>
-        <input
-          inputMode="decimal"
-          pattern="^[0-9]*[.,]?[0-9]*$"
-          placeholder="0.00"
-          value={amount}
-          onChange={(e) => onAmountChange(e.target.value.replace(",", "."))}
-          disabled={disabled}
-          className={cn(
-            "ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60",
+        <div className="ml-auto flex-1 min-w-0 flex flex-col items-end">
+          <input
+            inputMode="decimal"
+            pattern="^[0-9]*[.,]?[0-9]*$"
+            placeholder="0.00"
+            value={amount}
+            onChange={(e) => onAmountChange(e.target.value.replace(",", "."))}
+            disabled={disabled}
+            className={cn(
+              "w-full bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60",
+            )}
+          />
+          {usdValue && (
+            <span className="text-xs text-muted-foreground mt-0.5">
+              {usdValue}
+            </span>
           )}
-        />
+        </div>
       </div>
     </div>
   );
