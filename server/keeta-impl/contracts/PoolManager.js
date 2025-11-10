@@ -146,6 +146,7 @@ export class PoolManager {
       const KNOWN_POOL_ADDRESSES = [
         'keeta_arwmubo5gxl7vzz3rulmcqyts7webl73zakb5d6hsm2khf3b5xsbil5m3bpek', // KTA/WAVE (updated)
         'keeta_athjolef2zpnj6pimky2sbwbe6cmtdxakgixsveuck7fd7ql2vrf6mxkh4gy4', // KTA/RIDE
+        'keeta_aqvpd2ear7kby3pjpkvxrkurxk7z2kfv25mcyuqudvzd5xpcz5psup34qnss4', // TEST/WAVE
       ];
 
       let discovered = 0;

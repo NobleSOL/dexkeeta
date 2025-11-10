@@ -546,6 +546,12 @@ export class Pool {
 
     this.totalShares += shares;
 
+    // Save to database (PostgreSQL)
+    if (this.repository) {
+      await this.repository.saveLPPosition(this.poolAddress, userAddress, newShares);
+      console.log(`✅ Database updated: ${newShares} shares for ${userAddress.slice(0, 20)}...`);
+    }
+
     await this.saveLiquidityPositions(); // Keep for backward compatibility, but on-chain is primary
     await this.updateReserves();
 
