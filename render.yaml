@@ -4,8 +4,8 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: pnpm install --frozen-lockfile && pnpm add -D tsx && pnpm build:client && ls -la dist/
-    startCommand: node start.mjs
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
     envVars:
       - key: NODE_ENV
         value: production
