@@ -415,6 +415,13 @@ export class PoolManager {
       }
 
       const info = await pool.getPoolInfo();
+
+      // FILTER: Only return pools with active LP tokens (totalLPSupply > 0)
+      if (BigInt(info.totalLPSupply || 0) === 0n) {
+        console.log(`⏭️  Skipping pool with burned LP tokens: ${info.poolAddress.slice(-8)}`);
+        continue;
+      }
+
       poolsInfo.push(info);
     }
 
