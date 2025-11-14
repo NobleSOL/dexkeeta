@@ -316,6 +316,11 @@ export async function createStorageAccount(name, description, isPool = false, cr
   const storageAccount = pending.account;
   const marketId = storageAccount.publicKeyString.toString();
 
+  // Check if ops and treasury are the same account
+  const opsAddress = ops.publicKeyString.get();
+  const treasuryAddress = treasury.publicKeyString.get();
+  const sameAccount = opsAddress === treasuryAddress;
+
   // Default permissions for storage accounts (base flags only)
   const basePermissions = [
     'ACCESS',
@@ -323,7 +328,7 @@ export async function createStorageAccount(name, description, isPool = false, cr
     'STORAGE_DEPOSIT',
   ];
 
-  // Set storage info
+  // Set account info
   builder.setInfo(
     {
       name,
@@ -334,29 +339,36 @@ export async function createStorageAccount(name, description, isPool = false, cr
     { account: storageAccount }
   );
 
-  // If creator specified (for pools), grant OWNER to creator and SEND_ON_BEHALF to OPS
-  if (isPool && creatorAddress) {
+  // If creator is provided and different from ops: creator owns pool, ops routes
+  if (creatorAddress && creatorAddress !== opsAddress) {
     const creatorAccount = accountFromAddress(creatorAddress);
 
-    // Grant OWNER to creator
+    // Grant OWNER to creator (they control the pool)
     builder.updatePermissions(
       creatorAccount,
-      new KeetaNet.lib.Permissions(['OWNER', 'STORAGE_DEPOSIT', 'SEND_ON_BEHALF', 'ACCESS']),
+      new KeetaNet.lib.Permissions([
+        'OWNER',
+        'STORAGE_DEPOSIT',
+      ]),
       undefined,
       undefined,
       { account: storageAccount }
     );
 
-    // Grant SEND_ON_BEHALF to OPS (NO OWNER!)
+    // Grant SEND_ON_BEHALF to ops (for routing swaps only, NOT owner)
     builder.updatePermissions(
       ops,
-      new KeetaNet.lib.Permissions(['SEND_ON_BEHALF', 'STORAGE_DEPOSIT', 'ACCESS']),
+      new KeetaNet.lib.Permissions([
+        'SEND_ON_BEHALF',
+        'STORAGE_DEPOSIT',
+        'ACCESS',
+      ]),
       undefined,
       undefined,
       { account: storageAccount }
     );
   } else {
-    // Original behavior: grant OWNER to OPS for non-pool storage accounts
+    // No creator specified or creator is ops: ops owns the storage account
     builder.updatePermissions(
       ops,
       new KeetaNet.lib.Permissions([
