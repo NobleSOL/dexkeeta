@@ -319,12 +319,9 @@ export class PoolManager {
     console.log(`   Token A: ${symbolA}, Token B: ${symbolB}`);
 
     // Create storage account for the pool
-    // Use pool letter to keep name short (max 50 chars, A-Z_ only, no numbers)
     // OPS will remain the owner (centralized liquidity model)
-    const poolIndex = this.pools.size;
-    const poolLetter = String.fromCharCode(65 + poolIndex); // A, B, C, etc.
     const poolAddress = await createStorageAccount(
-      `SILVERBACK_POOL_${poolLetter}`,
+      'SILVERBACK_POOL',
       `Liquidity pool for ${symbolA} / ${symbolB}`,
       true // isPool flag - enables SEND_ON_BEHALF for permissionless swaps
     );
