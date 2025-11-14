@@ -309,6 +309,15 @@ export class PoolManager {
 
     console.log(`🏗️ Creating new pool for ${pairKey}...`);
 
+    // Fetch token symbols for better on-chain description
+    const { fetchTokenMetadata } = await import('../utils/client.js');
+    const tokenAMeta = await fetchTokenMetadata(tokenA);
+    const tokenBMeta = await fetchTokenMetadata(tokenB);
+    const symbolA = tokenAMeta.symbol;
+    const symbolB = tokenBMeta.symbol;
+
+    console.log(`   Token A: ${symbolA}, Token B: ${symbolB}`);
+
     // Create storage account for the pool
     // Use pool letter to keep name short (max 50 chars, A-Z_ only, no numbers)
     // OPS will remain the owner (centralized liquidity model)
@@ -316,7 +325,7 @@ export class PoolManager {
     const poolLetter = String.fromCharCode(65 + poolIndex); // A, B, C, etc.
     const poolAddress = await createStorageAccount(
       `SILVERBACK_POOL_${poolLetter}`,
-      `Liquidity pool for ${tokenA.slice(0, 12)}... / ${tokenB.slice(0, 12)}...`,
+      `Liquidity pool for ${symbolA} / ${symbolB}`,
       true // isPool flag - enables SEND_ON_BEHALF for permissionless swaps
     );
 
