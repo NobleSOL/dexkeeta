@@ -409,19 +409,13 @@ export class PoolManager {
     const poolsInfo = [];
 
     for (const pool of this.pools.values()) {
-      // FILTER: Only return pools with LP tokens (ignore legacy pools)
+      // FILTER: Only return pools with LP tokens (ignore legacy pools without LP token address)
       if (!pool.lpTokenAddress) {
+        console.log(`⏭️  Skipping legacy pool without LP token: ${pool.poolAddress.slice(-8)}`);
         continue;
       }
 
       const info = await pool.getPoolInfo();
-
-      // FILTER: Only return pools with active LP tokens (totalLPSupply > 0)
-      if (BigInt(info.totalLPSupply || 0) === 0n) {
-        console.log(`⏭️  Skipping pool with burned LP tokens: ${info.poolAddress.slice(-8)}`);
-        continue;
-      }
-
       poolsInfo.push(info);
     }
 
