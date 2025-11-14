@@ -475,6 +475,7 @@ export class PoolManager {
    * Remove liquidity from a pool
    */
   async removeLiquidity(
+    userClient,
     userAddress,
     tokenA,
     tokenB,
@@ -516,7 +517,7 @@ export class PoolManager {
       throw new Error(`Pool not found for ${tokenA} / ${tokenB}. Pool may need to be registered.`);
     }
 
-    return await pool.removeLiquidity(userAddress, liquidity, amountAMin, amountBMin);
+    return await pool.removeLiquidity(userClient, userAddress, liquidity, amountAMin, amountBMin);
   }
 
   /**

@@ -150,6 +150,7 @@ router.post('/remove', async (req, res) => {
 
     // Remove liquidity
     const result = await poolManager.removeLiquidity(
+      userClient,
       userAddress,
       tokenA,
       tokenB,

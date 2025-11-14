@@ -520,40 +520,40 @@ export async function mintLPTokens(lpTokenAddress, recipientAddress, amount) {
 
 /**
  * Burn LP tokens from a user when they remove liquidity
- * OPS burns the tokens on behalf of the user (user must approve first)
+ * Two-transaction flow: User sends LP tokens, then OPS burns supply
  *
  * @param {string} lpTokenAddress - LP token address
+ * @param {Object} userClient - User's client to send LP tokens
  * @param {string} userAddress - User address whose LP tokens to burn
  * @param {bigint} amount - Amount of LP tokens to burn
  */
-export async function burnLPTokens(lpTokenAddress, userAddress, amount) {
-  const client = await getOpsClient();
+export async function burnLPTokens(lpTokenAddress, userClient, userAddress, amount) {
+  const opsClient = await getOpsClient();
   const ops = getOpsAccount();
   const opsAddress = ops.publicKeyString.get();
 
   console.log(`🔥 Burning ${amount} LP tokens from ${userAddress.slice(0, 20)}...`);
 
-  const builder = client.initBuilder();
-
   const lpTokenAccount = accountFromAddress(lpTokenAddress);
   const userAccount = accountFromAddress(userAddress);
 
-  // ALWAYS send LP tokens from user to LP token account first (regardless of who the user is)
+  // TX1: User sends LP tokens to LP token account
   // This is necessary because modifyTokenSupply burns from the LP token account's balance
-  console.log(`  📤 Sending ${amount} LP tokens from user to LP token account...`);
-  if (userAddress === opsAddress) {
-    // OPS sends from their own balance
-    builder.send(lpTokenAccount, amount, lpTokenAccount, undefined, { account: ops });
-  } else {
-    // OPS sends on behalf of user using SEND_ON_BEHALF
-    builder.send(lpTokenAccount, amount, lpTokenAccount, undefined, { account: userAccount });
-  }
+  console.log(`  📤 TX1: User sending ${amount} LP tokens to LP token account...`);
+  const tx1Builder = userClient.initBuilder();
+  tx1Builder.send(lpTokenAccount, amount, lpTokenAccount);
+  await userClient.publishBuilder(tx1Builder);
+  console.log(`  ✅ TX1 complete: LP tokens sent to LP token account`);
 
-  // Now burn from LP token account (which now has the tokens)
-  console.log(`  🔥 Decreasing LP token supply by ${amount}...`);
-  builder.modifyTokenSupply(-amount, { account: lpTokenAccount });
+  // Wait for TX1 to settle
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
-  await client.publishBuilder(builder);
+  // TX2: OPS burns the LP token supply
+  console.log(`  🔥 TX2: OPS decreasing LP token supply by ${amount}...`);
+  const tx2Builder = opsClient.initBuilder();
+  tx2Builder.modifyTokenSupply(-amount, { account: lpTokenAccount });
+  await opsClient.publishBuilder(tx2Builder);
+  console.log(`  ✅ TX2 complete: LP token supply decreased`);
 
   console.log(`✅ Burned ${amount} LP tokens from ${userAddress.slice(0, 20)}...`);
 }

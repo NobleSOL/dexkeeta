@@ -582,13 +582,14 @@ export class Pool {
   /**
    * Remove liquidity from the pool
    *
+   * @param {Object} userClient - User's KeetaNet client (from createUserClient)
    * @param {string} userAddress - User's account address
    * @param {bigint} liquidity - Amount of shares to burn
    * @param {bigint} amountAMin - Minimum amount of token A to receive
    * @param {bigint} amountBMin - Minimum amount of token B to receive
    * @returns {Promise<{ amountA: bigint, amountB: bigint }>}
    */
-  async removeLiquidity(userAddress, liquidity, amountAMin = 0n, amountBMin = 0n) {
+  async removeLiquidity(userClient, userAddress, liquidity, amountAMin = 0n, amountBMin = 0n) {
     await this.updateReserves();
 
     // Get user's LP token balance (LP tokens are source of truth)
@@ -752,7 +753,7 @@ export class Pool {
     if (this.lpTokenAddress) {
       console.log(`🔥 Burning ${liquidity} LP tokens from ${userAddress.slice(0, 20)}...`);
       const { burnLPTokens } = await import('../utils/client.js');
-      await burnLPTokens(this.lpTokenAddress, userAddress, liquidity);
+      await burnLPTokens(this.lpTokenAddress, userClient, userAddress, liquidity);
       console.log(`✅ LP tokens burned successfully`);
     } else {
       console.warn(`⚠️ Pool ${this.poolAddress.slice(-8)} has no LP token - using legacy storage account approach`);
