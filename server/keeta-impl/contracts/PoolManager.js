@@ -510,16 +510,44 @@ export class PoolManager {
             poolData.pool_address,
             tokenA,
             tokenB,
+            poolData.lp_token_address || null,
             this.opsClient,
             this.repository
           );
+          pool.creator = poolData.creator || null;
 
           await pool.initialize();
           this.pools.set(pairKey, pool);
         }
       } catch (dbError) {
         console.warn(`⚠️ Could not load pool from database:`, dbError.message);
-        // Continue with in-memory pool if available
+
+        // Fallback to .pools.json if database fails
+        try {
+          const data = await fs.readFile(this.persistencePath, 'utf8');
+          const poolsData = JSON.parse(data);
+          const poolInfo = poolsData[pairKey];
+
+          if (poolInfo) {
+            console.log(`📥 Loading pool from .pools.json fallback: ${poolInfo.address.slice(-8)}`);
+
+            const { Pool } = await import('./Pool.js');
+            pool = new Pool(
+              poolInfo.address,
+              poolInfo.tokenA,
+              poolInfo.tokenB,
+              poolInfo.lpTokenAddress || null,
+              this.opsClient,
+              this.repository
+            );
+            pool.creator = poolInfo.creator || null;
+
+            await pool.initialize();
+            this.pools.set(pairKey, pool);
+          }
+        } catch (fileError) {
+          console.warn(`⚠️ Could not load pool from .pools.json:`, fileError.message);
+        }
       }
     }
 
