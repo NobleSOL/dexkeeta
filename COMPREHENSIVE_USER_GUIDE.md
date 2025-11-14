@@ -42,10 +42,11 @@ Silverback DEX is a **hybrid decentralized exchange** that enables permissionles
 - Publicly verifiable transaction history
 - Immutable and auditable ledger
 
-**⚠️ Centralized Liquidity (Temporary)**
-- Currently, only the DEX operator provides liquidity
-- Users CANNOT add liquidity to pools yet
-- This is a protocol limitation, not a design choice
+**✅ Permissionless Liquidity**
+- Anyone can create new liquidity pools
+- Anyone can add or remove liquidity from pools
+- Earn LP tokens representing your pool share
+- Fungible LP tokens (Uniswap V2-style)
 
 ---
 
@@ -195,55 +196,142 @@ Transaction = [
 
 ## How to Provide Liquidity
 
-### Current Status: Operator-Only Liquidity
+### Permissionless Liquidity Provision
 
-**⚠️ IMPORTANT:** Currently, users **CANNOT** provide liquidity. Only the DEX operator can add tokens to pools.
+**✅ GREAT NEWS:** Anyone can now provide liquidity to Silverback DEX! The protocol supports fully permissionless liquidity provision with fungible LP tokens.
 
-**Why This Limitation?**
+### How It Works
 
-Keeta blockchain currently lacks:
-1. **Fungible LP tokens** - No way to represent pool shares
-2. **Shared pool ownership** - Pools controlled by single private key
-3. **On-chain LP tracking** - No smart contracts to track ownership
+**Decentralized Liquidity Model:**
+- Anyone can create new pools for any token pair
+- Pool creators own their pools (not the DEX operator)
+- Anyone can add or remove liquidity from any pool
+- You receive LP tokens representing your share of the pool
+- LP tokens are fungible and tradeable (Uniswap V2-style)
+- Swap fees (0.3%) are distributed proportionally to LP token holders
 
-### How Liquidity Works Today
+**Ownership Model:**
+- Each pool is owned by its creator
+- DEX operator (OPS) only has routing permissions (SEND_ON_BEHALF)
+- OPS cannot drain pools or steal liquidity
+- Creators maintain full control of their pools
+- All liquidity operations are permissionless
 
-**Centralized Liquidity Model:**
-- DEX operator creates pools (e.g., KTA/RIDE)
-- Operator provides ALL liquidity for each pair
-- Users can swap through these pools permissionlessly
-- Swap fees (0.3%) accumulate in pool reserves
-- Operator earns all fees (since they provide all liquidity)
+### Adding Liquidity
 
-**Security Implications:**
-- ⚠️ Operator controls all pool liquidity
-- ⚠️ Operator could theoretically drain pools
-- ✅ BUT users maintain custody during swaps
-- ✅ Swaps are atomic and trustless
+**Step-by-Step Process:**
 
-### Future: Permissionless Liquidity
+1. **Navigate to Pool Tab**
+   - Click "Pool" in the navigation
+   - View all available pools
 
-**When will users be able to provide liquidity?**
+2. **Select a Pool**
+   - Choose an existing pool (e.g., KTA/RIDE)
+   - Or create a new pool for a token pair
 
-This requires Keeta protocol upgrades:
+3. **Enter Amounts**
+   - Enter the amount of Token A you want to add
+   - Enter the amount of Token B you want to add
+   - Amounts must maintain the pool's current ratio
 
-**Short Term (Off-Chain Solution):**
-- Backend tracks LP positions in database
-- Users "deposit" to pools (we hold custody)
-- Distribute fees based on LP shares
-- **Risk:** Still centralized, requires trust
+4. **Review Details**
+   - Check the exchange rate
+   - View your pool share percentage
+   - See estimated LP tokens you'll receive
 
-**Medium Term (Requires Keeta Features):**
-- Fungible token standard (like ERC-20)
-- Token minting/burning operations
-- Shared account control
-- On-chain metadata for LP tracking
+5. **Confirm Transaction**
+   - Click "Add Liquidity"
+   - Sign the transaction with your wallet
+   - Wait for blockchain confirmation
 
-**Long Term (Smart Contracts):**
-- Fully on-chain LP tokens
-- Automatic fee distribution
-- Permissionless pool creation
-- Full composability
+6. **Receive LP Tokens**
+   - LP tokens are minted and sent to your wallet
+   - LP tokens represent your share of the pool
+   - You can view your LP balance in your wallet
+
+**What Happens On-Chain:**
+```
+Transaction Flow:
+1. You send Token A to the pool
+2. You send Token B to the pool
+3. Pool calculates your LP share
+4. LP tokens are minted to your address
+5. Your position is recorded on-chain
+```
+
+### Removing Liquidity
+
+**Step-by-Step Process:**
+
+1. **Navigate to Positions**
+   - View your current LP positions
+   - See your pool share and value
+
+2. **Select Amount to Remove**
+   - Choose how many LP tokens to redeem
+   - View how much Token A and Token B you'll receive
+
+3. **Two-Transaction Process**
+   - **TX1:** You send LP tokens to the LP token account
+   - **TX2:** OPS burns the LP token supply
+   - Pool calculates your share of reserves
+   - Tokens are sent back to your wallet
+
+4. **Receive Your Tokens**
+   - You receive your proportional share of Token A
+   - You receive your proportional share of Token B
+   - LP tokens are burned (supply decreases)
+
+**Important:** Removing liquidity uses a two-transaction flow:
+- First, you send your LP tokens (you control this)
+- Then, OPS burns the supply (OPS owns the LP token account)
+- This ensures proper permissions without requiring you to grant OPS access to your wallet
+
+### Creating New Pools
+
+**Anyone can create a new pool!**
+
+1. **Select Token Pair**
+   - Choose Token A and Token B
+   - If pool doesn't exist, you'll be prompted to create it
+
+2. **Add Initial Liquidity**
+   - Set the initial exchange rate by providing both tokens
+   - This ratio becomes the starting price
+
+3. **Pool Creation**
+   - New pool storage account is created
+   - You become the pool owner
+   - LP token account is created
+   - Your initial LP tokens are minted
+
+4. **OPS Permissions**
+   - OPS receives SEND_ON_BEHALF permission (for routing swaps only)
+   - You maintain OWNER permission (full control)
+   - Anyone can add/remove liquidity permissionlessly
+
+### Earning Fees
+
+**How LP Earnings Work:**
+
+- Every swap through the pool charges a 0.3% fee
+- Fees are automatically added to pool reserves
+- This increases the value of all LP tokens
+- When you remove liquidity, you get your share of accumulated fees
+
+**Example:**
+```
+Pool starts with: 1000 KTA + 1000 RIDE
+You provide: 100 KTA + 100 RIDE (10% of pool)
+You receive: 100 LP tokens
+
+After swaps accumulate fees:
+Pool grows to: 1050 KTA + 1050 RIDE
+
+You remove liquidity (burn 100 LP tokens):
+You receive: 105 KTA + 105 RIDE (10% of grown pool)
+Your profit: 5 KTA + 5 RIDE (from fees)
+```
 
 ---
 
@@ -556,23 +644,39 @@ A: Yes! The code is open source. You'd need to:
 
 ### Liquidity Questions
 
-**Q: When can users provide liquidity?**
-A: This requires Keeta protocol upgrades for fungible LP tokens, shared ownership, or smart contracts. Timeline depends on Keeta team, not us. Follow our roadmap for updates!
+**Q: Can I provide liquidity to pools?**
+A: Yes! Liquidity provision is fully permissionless. Anyone can add or remove liquidity from any pool. You'll receive fungible LP tokens representing your share of the pool.
 
-**Q: Why can't I add to existing pools?**
-A: Keeta lacks the infrastructure for:
-- Fungible LP tokens (like ERC-20)
-- Shared pool ownership (multi-sig)
-- On-chain LP share tracking
+**Q: How do LP tokens work?**
+A: Silverback DEX uses fungible LP tokens (Uniswap V2-style):
+- One LP token per pool, shared by all liquidity providers
+- LP tokens are minted when you add liquidity
+- LP tokens can be traded or transferred
+- Burn LP tokens to remove liquidity and get your tokens back
+- LP token value grows as the pool earns fees
 
-**Q: How does the operator earn money?**
-A: The operator:
-- Provides all liquidity (capital at risk)
-- Earns 0.3% fee from every swap
-- Bears impermanent loss risk
-- Covers backend server costs
+**Q: Who owns the pools?**
+A: Each pool is owned by its creator:
+- Pool creator has OWNER permission (full control)
+- DEX operator (OPS) only has SEND_ON_BEHALF permission (for routing swaps)
+- OPS cannot drain pools or steal liquidity
+- Liquidity operations are fully permissionless
 
-This is like being a market maker, not a fee extractor.
+**Q: How do I earn fees as a liquidity provider?**
+A: Fees are earned automatically:
+- Every swap charges a 0.3% fee
+- Fees are added to pool reserves
+- This increases the value of all LP tokens
+- When you remove liquidity, you receive your proportional share of accumulated fees
+
+**Q: What is impermanent loss?**
+A: Impermanent loss occurs when token prices change after you provide liquidity:
+- You provide liquidity at one price ratio
+- Prices change in the market
+- Arbitrageurs rebalance the pool
+- You may end up with less value than if you just held the tokens
+- Loss becomes permanent when you remove liquidity
+- Fees can offset impermanent loss over time
 
 ---
 
@@ -600,6 +704,9 @@ A: Not yet - use the mobile web app at dexkeeta.vercel.app. A native app may com
 ### What's Live Today ✅
 
 - ✅ Permissionless token swaps
+- ✅ Permissionless liquidity provision
+- ✅ Fungible LP tokens (Uniswap V2-style)
+- ✅ Creator-owned pools
 - ✅ Atomic transaction execution
 - ✅ Mobile-responsive UI
 - ✅ Multiple token pairs
@@ -625,11 +732,10 @@ A: Not yet - use the mobile web app at dexkeeta.vercel.app. A native app may com
 - Multiple backend instances (redundancy)
 
 **Long Term (Dependent on Keeta)**
-- Permissionless liquidity provision
-- On-chain LP tokens
 - Smart contract migration
 - Governance system
 - Full DeFi composability
+- Cross-chain liquidity aggregation
 
 ---
 
@@ -650,8 +756,9 @@ A: Not yet - use the mobile web app at dexkeeta.vercel.app. A native app may com
 - Governance tokens
 
 **Want a new pool?**
-- Contact the DEX operator
-- Pools are created based on demand and liquidity
+- Anyone can create a pool for any token pair!
+- Simply navigate to the Pool tab and create your pool
+- You'll own the pool and earn fees from swaps
 
 ---
 
@@ -733,22 +840,24 @@ Silverback DEX represents the **best possible DEX architecture given Keeta's cur
 
 ✅ On-chain atomic transactions
 ✅ On-chain token custody and settlement
-✅ Permissionless trading for users
+✅ Permissionless trading and liquidity provision
+✅ Fungible LP tokens (Uniswap V2-style)
+✅ Creator-owned pools with decentralized control
 ⚠️ Off-chain AMM calculations (transparent limitation)
-⚠️ Centralized liquidity provisioning (temporary)
 
 This hybrid model is **honest about its trust assumptions** and provides **verifiable on-chain settlement**. When Keeta adds smart contract support, we'll migrate to a fully on-chain model.
 
 **Until then, users should understand:**
 - You're trusting the backend for calculations and routing
-- You maintain full custody of your tokens
-- Swaps are atomic and verifiable on-chain
+- You maintain full custody of your tokens and LP tokens
+- Swaps and liquidity operations are atomic and verifiable on-chain
+- Pool creators own their pools (not the DEX operator)
 - This is an interim solution, not the final form
 
 **Happy trading! 🚀**
 
 ---
 
-*Last Updated: 2025-11-06*
-*Version: 3.0 (Focused on operations, protocol, and centralized liquidity model)*
+*Last Updated: 2025-11-14*
+*Version: 4.0 (Permissionless liquidity provision with fungible LP tokens)*
 *Guide Author: Silverback Team*
