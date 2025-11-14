@@ -170,7 +170,7 @@ export default function KeetaDex() {
     }
   }, [wallet?.address]);
 
-  // Only show pools from the backend (respects backend's LP token filtering)
+  // Merge backend pools with pools discovered from user's LP tokens
   const allPools = React.useMemo(() => {
     const poolMap = new Map<string, KeetaPool>();
 
@@ -179,11 +179,31 @@ export default function KeetaDex() {
       poolMap.set(pool.poolAddress, pool);
     });
 
-    // Skip adding pools discovered from LP tokens that backend has filtered out
-    // This respects the backend's blacklist of legacy pools without LP tokens
+    // Add pools discovered from LP tokens (for newly created pools not yet in backend)
+    // But skip pools with zero liquidity (burned LP tokens)
     positions.forEach(position => {
       if (!poolMap.has(position.poolAddress)) {
-        console.log(`⏭️ Skipping legacy pool discovered from LP token: ${position.symbolA}/${position.symbolB}`);
+        // Only add if position has active liquidity
+        if (BigInt(position.liquidity || 0) > 0n) {
+          console.log(`🔍 Discovered pool from LP token: ${position.symbolA}/${position.symbolB}`);
+          poolMap.set(position.poolAddress, {
+            poolAddress: position.poolAddress,
+            tokenA: position.tokenA,
+            tokenB: position.tokenB,
+            symbolA: position.symbolA,
+            symbolB: position.symbolB,
+            reserveA: '0',
+            reserveB: '0',
+            reserveAHuman: 0,
+            reserveBHuman: 0,
+            price: '0',
+            totalShares: position.liquidity,
+            decimalsA: 9,
+            decimalsB: 9,
+          });
+        } else {
+          console.log(`⏭️ Skipping pool with burned LP tokens: ${position.symbolA}/${position.symbolB}`);
+        }
       }
     });
 
