@@ -232,49 +232,40 @@ export class Pool {
       );
     }
 
-    const treasury = getTreasuryAccount();
     const { getOpsClient } = await import('../utils/client.js');
 
     const tokenInAccount = accountFromAddress(tokenIn);
     const tokenOutAccount = accountFromAddress(tokenOut);
     const userAccount = accountFromAddress(userAddress);
     const poolAccount = accountFromAddress(this.poolAddress);
-    const treasuryAccount = treasury;
-
-    const amountInAfterFee = amountIn - feeAmount;
 
     console.log(`🔄 SWAP REQUEST: ${amountIn} ${tokenIn.slice(0, 12)}... → ${amountOut} ${tokenOut.slice(0, 12)}...`);
     console.log(`   User: ${userAddress.slice(0, 12)}...`);
-    console.log(`   Fee: ${feeAmount}, After fee: ${amountInAfterFee}`);
+    console.log(`   Fee: ${feeAmount} (stays in pool to benefit LPs)`);
 
     // ============================================================================
-    // SIMPLE TWO-TRANSACTION SWAP ARCHITECTURE
+    // SIMPLE TWO-TRANSACTION SWAP ARCHITECTURE (Uniswap V2 Model)
     // ============================================================================
-    // TX1: User sends tokenIn to pool (fee already deducted)
-    // TX2: Pool sends tokenOut to user (using SEND_ON_BEHALF)
+    // TX1: User sends FULL amountIn to pool (including fee)
+    // TX2: Pool sends amountOut to user (using SEND_ON_BEHALF)
     //
-    // This is simpler than swap requests and works with our permission model
+    // The fee stays in the pool reserves, increasing LP token value over time.
+    // This is the standard Uniswap V2 fee distribution mechanism.
     // ============================================================================
 
-    // TX1: User sends tokenIn (including fee) to pool
-    console.log('📝 TX1: User sends tokenIn to pool...');
+    // TX1: User sends full amountIn to pool (fee stays in pool for LPs)
+    console.log('📝 TX1: User sends tokenIn to pool (fee included for LPs)...');
     const tx1Builder = userClient.initBuilder();
 
-    // Send tokenIn to pool (amount after fee deduction)
-    tx1Builder.send(poolAccount, amountInAfterFee, tokenInAccount);
-
-    // Also send fee to treasury
-    if (feeAmount > 0n) {
-      tx1Builder.send(treasuryAccount, feeAmount, tokenInAccount);
-    }
+    // Send FULL amountIn to pool (fee stays in reserves to benefit LP token holders)
+    tx1Builder.send(poolAccount, amountIn, tokenInAccount);
 
     await userClient.publishBuilder(tx1Builder);
 
     // Extract TX1 block hash from builder.blocks array
     // This is the transaction where user sends tokens to pool (shown in explorer)
     // Transaction structure:
-    // Block 0: User sends tokenIn to pool <- THIS ONE for explorer
-    // Block 1: User sends fee to treasury (if fee > 0)
+    // Block 0: User sends tokenIn to pool (including fee for LPs) <- THIS ONE for explorer
     let tx1Hash = null;
     if (tx1Builder.blocks && tx1Builder.blocks.length > 0) {
       // Use index 0 (first block) - the user sends tokenIn to pool
@@ -302,7 +293,7 @@ export class Pool {
       }
     }
 
-    console.log(`✅ TX1 published (hash: ${tx1Hash || 'NOT_CAPTURED'}): User sent ${amountInAfterFee} tokenIn to pool + ${feeAmount} fee`);
+    console.log(`✅ TX1 published (hash: ${tx1Hash || 'NOT_CAPTURED'}): User sent ${amountIn} tokenIn to pool (includes ${feeAmount} fee for LPs)`);
 
     // Wait briefly for TX1 to be processed
     await new Promise(resolve => setTimeout(resolve, 1000));
