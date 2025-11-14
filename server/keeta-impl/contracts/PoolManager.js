@@ -246,41 +246,31 @@ export class PoolManager {
 
     const client = await getOpsClient();
     const ops = getOpsAccount();
+    const builder = client.initBuilder();
 
     const poolAccount = accountFromAddress(poolAddress);
     const creatorAccount = accountFromAddress(creatorAddress);
 
-    // First transaction: Grant OWNER to creator
-    console.log(`   TX1: Granting OWNER to creator...`);
-    const builder1 = client.initBuilder();
-    builder1.updatePermissions(
+    // Grant OWNER to creator
+    builder.updatePermissions(
       creatorAccount,
       new KeetaNet.lib.Permissions(['OWNER']),
       undefined,
       undefined,
       { account: poolAccount }
     );
-    await client.publishBuilder(builder1);
 
-    // Wait for first transaction to settle (increased to 10 seconds)
-    console.log(`   Waiting 10s for TX1 to settle...`);
-    await new Promise(resolve => setTimeout(resolve, 10000));
-
-    // Second transaction: Update Ops permissions
-    console.log(`   TX2: Updating OPS permissions to SEND_ON_BEHALF...`);
-    const builder2 = client.initBuilder();
-    builder2.updatePermissions(
+    // Update Ops permissions: keep SEND_ON_BEHALF plus STORAGE_DEPOSIT and ACCESS
+    // These are needed to interact with token storage accounts within the pool
+    builder.updatePermissions(
       ops,
       new KeetaNet.lib.Permissions(['SEND_ON_BEHALF', 'STORAGE_DEPOSIT', 'ACCESS']),
       undefined,
       undefined,
       { account: poolAccount }
     );
-    await client.publishBuilder(builder2);
 
-    // Wait for second transaction to settle
-    console.log(`   Waiting 10s for TX2 to settle...`);
-    await new Promise(resolve => setTimeout(resolve, 10000));
+    await client.publishBuilder(builder);
 
     console.log(`✅ Transferred ownership of pool ${poolAddress.slice(0, 20)}... to ${creatorAddress.slice(0, 20)}...`);
     console.log(`   Ops retains SEND_ON_BEHALF permissions for routing`);
