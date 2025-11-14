@@ -309,18 +309,16 @@ export class PoolManager {
     console.log(`   Token A: ${symbolA}, Token B: ${symbolB}`);
 
     // Create storage account for the pool
-    // OPS will remain the owner (centralized liquidity model)
+    // Creator will be the owner, OPS gets SEND_ON_BEHALF for routing
     const poolAddress = await createStorageAccount(
       'SILVERBACK_POOL',
       `Liquidity pool for ${symbolA} / ${symbolB}`,
-      true // isPool flag - enables SEND_ON_BEHALF for permissionless swaps
+      true, // isPool flag - enables SEND_ON_BEHALF for permissionless swaps
+      creatorAddress // creator will be granted OWNER during creation
     );
 
     console.log(`✅ Pool created at ${poolAddress}`);
-    console.log(`   Transferring ownership to creator: ${creatorAddress.slice(0, 20)}...`);
-
-    // Transfer ownership to creator while maintaining OPS SEND_ON_BEHALF permission
-    await this.transferPoolOwnership(poolAddress, creatorAddress, tokenA, tokenB);
+    console.log(`   ✅ Creator granted OWNER, OPS granted SEND_ON_BEHALF`);
 
     // Create LP token for this pool
     console.log(`   Creating LP token for pool...`);
