@@ -174,40 +174,103 @@ export default function KeetaDex() {
   const allPools = React.useMemo(() => {
     const poolMap = new Map<string, KeetaPool>();
 
-    // Add all backend pools
+    // Blacklist legacy/test pools that should not be displayed
+    const BLACKLISTED_POOLS = new Set([
+      'keeta_aqkycfpx2rafbdie3kreukjl7cg274kjdo6f6ajk42dp6tpw2z3nug2yd2buk', // Legacy KTA/TEST pool
+      'keeta_aty6ahjppurrlzmcxk45kthor7ojea77aeyg6ext5gdvwxh34uue57mtct26a',  // Legacy pool
+    ]);
+
+    // Add all backend pools (except blacklisted ones and empty pools)
     pools.forEach(pool => {
+      if (BLACKLISTED_POOLS.has(pool.poolAddress)) {
+        console.log(`⏭️ Skipping blacklisted pool: ${pool.poolAddress.slice(-8)}`);
+        return;
+      }
+
+      // Skip pools with no liquidity (0 reserves)
+      const reserveAHuman = pool.reserveAHuman ?? 0;
+      const reserveBHuman = pool.reserveBHuman ?? 0;
+
+      if (reserveAHuman === 0 && reserveBHuman === 0) {
+        console.log(`⏭️ Skipping empty backend pool: ${pool.symbolA}/${pool.symbolB} (${pool.poolAddress.slice(-8)})`);
+        return;
+      }
+
       poolMap.set(pool.poolAddress, pool);
     });
 
     // Add pools discovered from LP tokens (for newly created pools not yet in backend)
     // But skip pools with zero liquidity (burned LP tokens)
     positions.forEach(position => {
+      // Skip blacklisted pools even if discovered from LP tokens
+      if (BLACKLISTED_POOLS.has(position.poolAddress)) {
+        console.log(`⏭️ Skipping blacklisted pool from LP token: ${position.poolAddress.slice(-8)}`);
+        return;
+      }
+
       if (!poolMap.has(position.poolAddress)) {
-        // Only add if position has active liquidity
-        if (BigInt(position.liquidity || 0) > 0n) {
-          console.log(`🔍 Discovered pool from LP token: ${position.symbolA}/${position.symbolB}`);
+        // Parse amounts to check if position is meaningful
+        const userAmountA = parseFloat(position.amountA || '0');
+        const userAmountB = parseFloat(position.amountB || '0');
+        const sharePercent = position.sharePercent || 0;
+
+        // Skip if:
+        // 1. No LP tokens (liquidity = 0)
+        // 2. Dust amounts (both amounts < 0.000001)
+        // 3. Share percent is effectively zero (< 0.0001%)
+        const hasMeaningfulLiquidity =
+          BigInt(position.liquidity || 0) > 0n &&
+          (userAmountA >= 0.000001 || userAmountB >= 0.000001) &&
+          sharePercent >= 0.0001;
+
+        if (hasMeaningfulLiquidity) {
+          console.log(`🔍 Discovered pool from LP token: ${position.symbolA}/${position.symbolB}`, {
+            amountA: position.amountA,
+            amountB: position.amountB,
+            sharePercent: position.sharePercent,
+          });
+
+          // Calculate total pool reserves from user's position
+          // User has sharePercent% of the pool, so total = userAmount / (sharePercent / 100)
+          const totalReserveAHuman = sharePercent > 0 ? (userAmountA / sharePercent) * 100 : 0;
+          const totalReserveBHuman = sharePercent > 0 ? (userAmountB / sharePercent) * 100 : 0;
+
+          console.log(`📊 Calculated reserves:`, {
+            userAmountA,
+            userAmountB,
+            sharePercent,
+            totalReserveAHuman,
+            totalReserveBHuman,
+          });
+
+          // Convert to atomic units (assuming 9 decimals)
+          const reserveA = (totalReserveAHuman * 1e9).toString();
+          const reserveB = (totalReserveBHuman * 1e9).toString();
+
           poolMap.set(position.poolAddress, {
             poolAddress: position.poolAddress,
             tokenA: position.tokenA,
             tokenB: position.tokenB,
             symbolA: position.symbolA,
             symbolB: position.symbolB,
-            reserveA: '0',
-            reserveB: '0',
-            reserveAHuman: 0,
-            reserveBHuman: 0,
-            price: '0',
+            reserveA,
+            reserveB,
+            reserveAHuman: totalReserveAHuman,
+            reserveBHuman: totalReserveBHuman,
+            price: totalReserveBHuman > 0 ? (totalReserveAHuman / totalReserveBHuman).toString() : '0',
             totalShares: position.liquidity,
             decimalsA: 9,
             decimalsB: 9,
           });
         } else {
-          console.log(`⏭️ Skipping pool with burned LP tokens: ${position.symbolA}/${position.symbolB}`);
+          console.log(`⏭️ Skipping pool with no meaningful liquidity: ${position.symbolA}/${position.symbolB} (amountA: ${userAmountA}, amountB: ${userAmountB}, share: ${sharePercent}%)`);
         }
       }
     });
 
-    return Array.from(poolMap.values());
+    const result = Array.from(poolMap.values());
+    console.log('🔄 allPools after merge:', result);
+    return result;
   }, [pools, positions]);
 
   // Auto-refresh balances every 30 seconds while wallet is connected

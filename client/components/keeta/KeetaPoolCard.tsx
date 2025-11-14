@@ -175,7 +175,7 @@ export function KeetaPoolCard({
               ~{userDailyFees.toFixed(6)} {pool.symbolA}/day
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              From trading volume and arbitrage (0.3% fee to treasury)
+              From trading volume (0.25% LP fee, 0.05% to treasury)
             </div>
           </div>
         </>
