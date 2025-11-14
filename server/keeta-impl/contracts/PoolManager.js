@@ -40,6 +40,12 @@ export class PoolManager {
       const poolData = await this.repository.loadPools();
 
       for (const row of poolData) {
+        // FILTER: Only load pools with LP tokens (ignore legacy pools)
+        if (!row.lp_token_address) {
+          console.log(`⏭️  Skipping legacy pool without LP token: ${row.pool_address.slice(-8)}`);
+          continue;
+        }
+
         const pairKey = getPairKey(row.token_a, row.token_b);
         this.poolAddresses.set(pairKey, row.pool_address);
 
@@ -74,6 +80,12 @@ export class PoolManager {
       const poolData = JSON.parse(data);
 
       for (const [pairKey, poolInfo] of Object.entries(poolData)) {
+        // FILTER: Only load pools with LP tokens (ignore legacy pools)
+        if (!poolInfo.lpTokenAddress) {
+          console.log(`⏭️  Skipping legacy pool without LP token: ${pairKey}`);
+          continue;
+        }
+
         this.poolAddresses.set(pairKey, poolInfo.address);
 
         // Initialize pool instance with LP token address if available
@@ -395,12 +407,17 @@ export class PoolManager {
    */
   async getAllPoolsInfo() {
     const poolsInfo = [];
-    
+
     for (const pool of this.pools.values()) {
+      // FILTER: Only return pools with LP tokens (ignore legacy pools)
+      if (!pool.lpTokenAddress) {
+        continue;
+      }
+
       const info = await pool.getPoolInfo();
       poolsInfo.push(info);
     }
-    
+
     return poolsInfo;
   }
 

@@ -170,7 +170,7 @@ export default function KeetaDex() {
     }
   }, [wallet?.address]);
 
-  // Merge backend pools with pools discovered from user's LP tokens (on-chain discovery)
+  // Only show pools from the backend (respects backend's LP token filtering)
   const allPools = React.useMemo(() => {
     const poolMap = new Map<string, KeetaPool>();
 
@@ -179,28 +179,11 @@ export default function KeetaDex() {
       poolMap.set(pool.poolAddress, pool);
     });
 
-    // Add pools from user's LP token positions (on-chain discovery!)
+    // Skip adding pools discovered from LP tokens that backend has filtered out
+    // This respects the backend's blacklist of legacy pools without LP tokens
     positions.forEach(position => {
       if (!poolMap.has(position.poolAddress)) {
-        // This pool isn't in the backend - add it from on-chain data!
-        console.log(`🔍 Discovered pool from LP token: ${position.symbolA}/${position.symbolB}`);
-        poolMap.set(position.poolAddress, {
-          poolAddress: position.poolAddress,
-          tokenA: position.tokenA,
-          tokenB: position.tokenB,
-          symbolA: position.symbolA,
-          symbolB: position.symbolB,
-          // We'll need to fetch reserves on-chain, but for now use empty values
-          // The position data has the user's share already calculated
-          reserveA: '0',
-          reserveB: '0',
-          reserveAHuman: 0,
-          reserveBHuman: 0,
-          price: '0',
-          totalShares: position.liquidity, // Use user's liquidity as a placeholder
-          decimalsA: 9,
-          decimalsB: 9,
-        });
+        console.log(`⏭️ Skipping legacy pool discovered from LP token: ${position.symbolA}/${position.symbolB}`);
       }
     });
 
