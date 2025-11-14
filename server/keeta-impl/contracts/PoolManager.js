@@ -337,8 +337,14 @@ export class PoolManager {
     this.pools.set(pairKey, pool);
     this.poolAddresses.set(pairKey, poolAddress);
 
-    // Persist to database (including LP token address)
-    await this.savePool(pool);
+    // Persist to database (including LP token address) - non-critical
+    try {
+      await this.savePool(pool);
+      console.log(`✅ Pool saved to database`);
+    } catch (dbError) {
+      console.warn(`⚠️ Could not save pool to database (non-critical):`, dbError.message);
+      console.log(`   Pool created successfully on-chain, database sync skipped`);
+    }
 
     return pool;
   }
