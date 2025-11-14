@@ -47,3 +47,6 @@ test-send-on-behalf-permissions.mjs
 test-send-on-behalf-simple.mjs
 test-burner-can-swap.mjs
 test-real-swap-creator-pool.mjs
+
+# Test scripts folder (temporary/debugging scripts)
+/tests/
