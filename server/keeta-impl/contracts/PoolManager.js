@@ -48,7 +48,9 @@ export class PoolManager {
           row.pool_address,
           row.token_a,
           row.token_b,
-          row.lp_token_address || null
+          row.lp_token_address || null,
+          null,  // opsClient
+          this.repository  // repository
         );
         pool.creator = row.creator || null; // Set creator/owner
         await pool.initialize();
@@ -79,7 +81,9 @@ export class PoolManager {
           poolInfo.address,
           poolInfo.tokenA,
           poolInfo.tokenB,
-          poolInfo.lpTokenAddress || null
+          poolInfo.lpTokenAddress || null,
+          null,  // opsClient
+          this.repository  // repository
         );
         pool.creator = poolInfo.creator || null; // Set creator/owner
         await pool.initialize();
@@ -142,11 +146,9 @@ export class PoolManager {
       const { getOpsClient, accountFromAddress } = await import('../utils/client.js');
       const client = await getOpsClient();
 
-      // Known pool addresses to check
+      // Known pool addresses to check (cleared - no legacy pools)
       const KNOWN_POOL_ADDRESSES = [
-        'keeta_arwmubo5gxl7vzz3rulmcqyts7webl73zakb5d6hsm2khf3b5xsbil5m3bpek', // KTA/WAVE (updated)
-        'keeta_athjolef2zpnj6pimky2sbwbe6cmtdxakgixsveuck7fd7ql2vrf6mxkh4gy4', // KTA/RIDE
-        'keeta_aqvpd2ear7kby3pjpkvxrkurxk7z2kfv25mcyuqudvzd5xpcz5psup34qnss4', // TEST/WAVE
+        // Legacy pools removed - new pools will be created with LP tokens
       ];
 
       let discovered = 0;
@@ -193,8 +195,8 @@ export class PoolManager {
             continue;
           }
 
-          // Create and initialize pool
-          const pool = new Pool(poolAddress, tokenA, tokenB);
+          // Create and initialize pool (discovered pools may not have LP tokens yet)
+          const pool = new Pool(poolAddress, tokenA, tokenB, null, null, this.repository);
           await pool.initialize();
 
           this.pools.set(pairKey, pool);
@@ -244,31 +246,41 @@ export class PoolManager {
 
     const client = await getOpsClient();
     const ops = getOpsAccount();
-    const builder = client.initBuilder();
 
     const poolAccount = accountFromAddress(poolAddress);
     const creatorAccount = accountFromAddress(creatorAddress);
 
-    // Grant OWNER to creator
-    builder.updatePermissions(
+    // First transaction: Grant OWNER to creator
+    console.log(`   TX1: Granting OWNER to creator...`);
+    const builder1 = client.initBuilder();
+    builder1.updatePermissions(
       creatorAccount,
       new KeetaNet.lib.Permissions(['OWNER']),
       undefined,
       undefined,
       { account: poolAccount }
     );
+    await client.publishBuilder(builder1);
 
-    // Update Ops permissions: keep SEND_ON_BEHALF plus STORAGE_DEPOSIT and ACCESS
-    // These are needed to interact with token storage accounts within the pool
-    builder.updatePermissions(
+    // Wait for first transaction to settle (increased to 10 seconds)
+    console.log(`   Waiting 10s for TX1 to settle...`);
+    await new Promise(resolve => setTimeout(resolve, 10000));
+
+    // Second transaction: Update Ops permissions
+    console.log(`   TX2: Updating OPS permissions to SEND_ON_BEHALF...`);
+    const builder2 = client.initBuilder();
+    builder2.updatePermissions(
       ops,
       new KeetaNet.lib.Permissions(['SEND_ON_BEHALF', 'STORAGE_DEPOSIT', 'ACCESS']),
       undefined,
       undefined,
       { account: poolAccount }
     );
+    await client.publishBuilder(builder2);
 
-    await client.publishBuilder(builder);
+    // Wait for second transaction to settle
+    console.log(`   Waiting 10s for TX2 to settle...`);
+    await new Promise(resolve => setTimeout(resolve, 10000));
 
     console.log(`✅ Transferred ownership of pool ${poolAddress.slice(0, 20)}... to ${creatorAddress.slice(0, 20)}...`);
     console.log(`   Ops retains SEND_ON_BEHALF permissions for routing`);
@@ -314,16 +326,23 @@ export class PoolManager {
     // Transfer ownership to creator while maintaining OPS SEND_ON_BEHALF permission
     await this.transferPoolOwnership(poolAddress, creatorAddress, tokenA, tokenB);
 
-    // Create and initialize pool instance
-    const pool = new Pool(poolAddress, tokenA, tokenB);
+    // Create LP token for this pool
+    console.log(`   Creating LP token for pool...`);
+    const { createLPToken } = await import('../utils/client.js');
+    const lpTokenAddress = await createLPToken(poolAddress, tokenA, tokenB);
+    console.log(`   ✅ LP token created: ${lpTokenAddress}`);
+
+    // Create and initialize pool instance with LP token
+    const pool = new Pool(poolAddress, tokenA, tokenB, null, this.repository);
     pool.creator = creatorAddress; // Track who created the pool
+    pool.lpTokenAddress = lpTokenAddress; // Store LP token address
     await pool.initialize();
 
     // Register pool
     this.pools.set(pairKey, pool);
     this.poolAddresses.set(pairKey, poolAddress);
 
-    // Persist to database
+    // Persist to database (including LP token address)
     await this.savePool(pool);
 
     return pool;
@@ -464,62 +483,118 @@ export class PoolManager {
   ) {
     let pool = this.getPool(tokenA, tokenB);
 
-    // If pool not loaded or doesn't have repository, load from database
+    // If pool not loaded or doesn't have repository, try to load from database
     if (!pool || !pool.repository) {
       const pairKey = getPairKey(tokenA, tokenB);
-      const poolData = await this.repository.getPoolByPairKey(tokenA, tokenB);
 
-      if (!poolData) {
-        throw new Error(`No pool found for ${tokenA} / ${tokenB}`);
+      try {
+        const poolData = await this.repository.getPoolByPairKey(tokenA, tokenB);
+
+        if (poolData) {
+          console.log(`📥 Loading pool on-demand for remove liquidity: ${poolData.pool_address.slice(-8)}`);
+
+          const { Pool } = await import('./Pool.js');
+          pool = new Pool(
+            poolData.pool_address,
+            tokenA,
+            tokenB,
+            this.opsClient,
+            this.repository
+          );
+
+          await pool.initialize();
+          this.pools.set(pairKey, pool);
+        }
+      } catch (dbError) {
+        console.warn(`⚠️ Could not load pool from database:`, dbError.message);
+        // Continue with in-memory pool if available
       }
+    }
 
-      console.log(`📥 Loading pool on-demand for remove liquidity: ${poolData.pool_address.slice(-8)}`);
-
-      const { Pool } = await import('./Pool.js');
-      pool = new Pool(
-        poolData.pool_address,
-        tokenA,
-        tokenB,
-        this.opsClient,
-        this.repository
-      );
-
-      await pool.initialize();
-      this.pools.set(pairKey, pool);
+    if (!pool) {
+      throw new Error(`Pool not found for ${tokenA} / ${tokenB}. Pool may need to be registered.`);
     }
 
     return await pool.removeLiquidity(userAddress, liquidity, amountAMin, amountBMin);
   }
 
   /**
-   * Get user's LP position across all pools
-   * Uses PostgreSQL database for persistent LP position tracking
+   * Get user's LP positions across all pools
+   * BLOCKCHAIN-FIRST: Scans user's wallet for LP tokens, derives positions from metadata
+   * Database is only used as fallback for additional metadata
    */
   async getUserPositions(userAddress) {
     const positions = [];
 
-    console.log(`📊 Checking positions for ${userAddress} from database`);
+    console.log(`📊 Scanning ${userAddress} wallet for LP tokens (blockchain-first)...`);
 
     try {
-      // Query LP positions from PostgreSQL database
-      const dbPositions = await this.repository.getUserPositions(userAddress);
+      const { accountFromAddress, getOpsClient } = await import('../utils/client.js');
+      const client = await getOpsClient();
+      const userAccount = accountFromAddress(userAddress);
 
-      console.log(`📋 Found ${dbPositions.length} positions in database`);
+      // Query user's token balances from blockchain (real-time data!)
+      const userBalances = await client.allBalances({ account: userAccount });
 
-      for (const dbPos of dbPositions) {
+      console.log(`📋 Found ${userBalances.length} tokens in wallet, scanning for LP tokens...`);
+
+      // Scan user's balances for LP tokens
+      for (const balance of userBalances) {
         try {
-          // Get the pool instance to access current reserves
-          let pool = this.getPool(dbPos.token_a, dbPos.token_b);
+          const tokenAddr = balance.token?.publicKeyString?.get?.() || balance.token?.toString();
+          const shares = BigInt(balance.balance || 0n);
+
+          if (shares <= 0n) {
+            continue; // Skip zero balances
+          }
+
+          // Get token metadata to check if it's an LP token
+          const tokenInfo = await client.client.getAccountsInfo([tokenAddr]);
+          const tokenData = tokenInfo[tokenAddr];
+
+          if (!tokenData?.info?.metadata) {
+            continue; // Not an LP token (no metadata)
+          }
+
+          // Decode metadata
+          let metadata;
+          try {
+            const metadataStr = Buffer.from(tokenData.info.metadata, 'base64').toString('utf8');
+            metadata = JSON.parse(metadataStr);
+          } catch (e) {
+            continue; // Invalid metadata format
+          }
+
+          // Check if this is an LP token
+          if (metadata.type !== 'LP_TOKEN') {
+            continue; // Not an LP token
+          }
+
+          console.log(`  🪙 Found LP token: ${tokenAddr.slice(0, 20)}... with ${shares} shares`);
+          console.log(`     Pool: ${metadata.pool?.slice(0, 20)}...`);
+
+          // Extract pool info from LP token metadata
+          const poolAddress = metadata.pool;
+          const tokenA = metadata.tokenA;
+          const tokenB = metadata.tokenB;
+
+          if (!poolAddress || !tokenA || !tokenB) {
+            console.log(`     ⚠️ Missing pool metadata, skipping`);
+            continue;
+          }
+
+          // Load pool instance
+          let pool = this.getPool(tokenA, tokenB);
 
           // If pool not loaded yet, load it on-demand
           if (!pool) {
-            console.log(`  📥 Pool not loaded, loading on-demand: ${dbPos.pool_address.slice(-8)}`);
+            console.log(`     📥 Loading pool from blockchain...`);
             try {
               const { Pool } = await import('./Pool.js');
               pool = new Pool(
-                dbPos.pool_address,
-                dbPos.token_a,
-                dbPos.token_b,
+                poolAddress,
+                tokenA,
+                tokenB,
                 this.opsClient,
                 this.repository
               );
@@ -528,36 +603,22 @@ export class PoolManager {
               await pool.loadState();
 
               // Store in manager for future use
-              const pairKey = getPairKey(dbPos.token_a, dbPos.token_b);
+              const pairKey = getPairKey(tokenA, tokenB);
               this.pools.set(pairKey, pool);
 
-              console.log(`  ✅ Pool loaded: ${dbPos.pool_address.slice(-8)}`);
+              console.log(`     ✅ Pool loaded: ${poolAddress.slice(-8)}`);
             } catch (loadError) {
-              console.error(`  ❌ Failed to load pool ${dbPos.pool_address.slice(-8)}:`, loadError.message);
+              console.error(`     ❌ Failed to load pool ${poolAddress.slice(-8)}:`, loadError.message);
               continue;
             }
           }
 
-          const shares = BigInt(dbPos.shares);
+          // Get LP token total supply
+          const lpTokenInfo = await client.client.getAccountsInfo([tokenAddr]);
+          const lpData = lpTokenInfo[tokenAddr];
+          const totalShares = lpData?.balance ? BigInt(lpData.balance) : 0n;
 
-          if (shares <= 0n) {
-            continue;
-          }
-
-          console.log(`  Pool ${pool.poolAddress.slice(-8)}: User has ${shares} shares`);
-
-          const symbolA = await pool.getTokenSymbol(pool.tokenA);
-          const symbolB = await pool.getTokenSymbol(pool.tokenB);
-
-          // Calculate totalShares from database (sum all LP positions for this pool)
-          // This is necessary because pool.totalShares may be 0 if loaded on-demand
-          const allPoolPositions = await this.repository.getLPPositions(dbPos.pool_address);
-          const totalShares = allPoolPositions.reduce(
-            (sum, pos) => sum + BigInt(pos.shares),
-            0n
-          );
-
-          console.log(`  Total shares in pool: ${totalShares} (calculated from ${allPoolPositions.length} positions)`);
+          console.log(`     Total LP supply: ${totalShares}`);
 
           // Calculate share percentage
           const sharePercent = totalShares > 0n
@@ -572,6 +633,10 @@ export class PoolManager {
             pool.reserveA,
             pool.reserveB
           );
+
+          // Get token symbols
+          const symbolA = await pool.getTokenSymbol(pool.tokenA);
+          const symbolB = await pool.getTokenSymbol(pool.tokenB);
 
           // Use cached decimals from pool object (fetched during pool initialization)
           const decimalsA = pool.decimalsA;
@@ -597,17 +662,19 @@ export class PoolManager {
             amountB: amountBFormatted,
             timestamp: Date.now(),
           });
+
+          console.log(`     ✅ Position added: ${sharePercent.toFixed(2)}% of ${symbolA}/${symbolB} pool`);
         } catch (error) {
-          console.error(`Error processing position for pool ${dbPos.pool_address}:`, error.message);
-          // Continue to next position instead of failing completely
+          console.error(`  ❌ Error processing token balance:`, error.message);
+          // Continue to next balance instead of failing completely
         }
       }
     } catch (error) {
-      console.error(`Error querying user positions from database:`, error.message);
-      // Return empty array on database error
+      console.error(`Error querying user LP tokens from blockchain:`, error.message);
+      // Return empty array on error
     }
 
-    console.log(`✅ Found ${positions.length} positions with liquidity`);
+    console.log(`✅ Found ${positions.length} LP positions on-chain (blockchain-first!)`);
     return positions;
   }
 

@@ -30,19 +30,19 @@ import { CONFIG, toAtomic, fromAtomic } from '../utils/constants.js';
  * - Permissionless: users control their own funds
  */
 export class Pool {
-  constructor(poolAddress, tokenA, tokenB, opsClient = null, repository = null) {
+  constructor(poolAddress, tokenA, tokenB, lpTokenAddress = null, opsClient = null, repository = null) {
     this.poolAddress = poolAddress; // Pool coordinator address
     this.tokenA = tokenA; // Token address
     this.tokenB = tokenB; // Token address
+    this.lpTokenAddress = lpTokenAddress; // Fungible LP token address (ERC-20 style)
     this.decimalsA = null;
     this.decimalsB = null;
     this.reserveA = 0n; // Aggregated from all LP accounts
     this.reserveB = 0n; // Aggregated from all LP accounts
     this.creator = null; // Pool creator/owner (for simple architecture)
 
-    // Multi-LP tracking
-    // SIMPLIFIED: Only track shares, calculate amounts from current reserves on-demand
-    // This prevents tracking drift when swaps change pool composition
+    // Multi-LP tracking (DEPRECATED - LP tokens are now used instead)
+    // Kept for backward compatibility and migration
     this.lpAccounts = new Map(); // userAddress => { lpStorageAddress, shares }
     this.totalShares = 0n;
 
@@ -523,36 +523,47 @@ export class Pool {
     // Execute transaction
     await userClient.publishBuilder(builder);
 
-    // Update position tracking (store shares on-chain in LP STORAGE account)
-    const newShares = existingLP.shares + shares;
-    let lpStorageAddress = existingLP.lpStorageAddress;
+    // MINT LP TOKENS TO USER (Fungible token approach - like Uniswap)
+    if (this.lpTokenAddress) {
+      console.log(`🪙 Minting ${shares} LP tokens to ${userAddress.slice(0, 20)}...`);
+      const { mintLPTokens } = await import('../utils/client.js');
+      await mintLPTokens(this.lpTokenAddress, userAddress, shares);
+      console.log(`✅ LP tokens minted successfully`);
+    } else {
+      console.warn(`⚠️ Pool ${this.poolAddress.slice(-8)} has no LP token - using legacy storage account approach`);
 
-    // Create LP storage account if this is a new position
-    if (!lpStorageAddress) {
-      console.log(`📝 Creating LP STORAGE account on-chain for ${userAddress.slice(0, 20)}...`);
-      lpStorageAddress = await createLPStorageAccount(userAddress, this.poolAddress, this.tokenA, this.tokenB);
-      console.log(`✅ LP STORAGE account created: ${lpStorageAddress}`);
+      // LEGACY: Storage account approach (for pools created before LP token implementation)
+      const newShares = existingLP.shares + shares;
+      let lpStorageAddress = existingLP.lpStorageAddress;
+
+      if (!lpStorageAddress) {
+        console.log(`📝 Creating LP STORAGE account on-chain for ${userAddress.slice(0, 20)}...`);
+        lpStorageAddress = await createLPStorageAccount(userAddress, this.poolAddress, this.tokenA, this.tokenB);
+        console.log(`✅ LP STORAGE account created: ${lpStorageAddress}`);
+      }
+
+      await updateLPMetadata(lpStorageAddress, newShares, this.poolAddress, userAddress);
+
+      this.lpAccounts.set(userAddress, {
+        lpStorageAddress,
+        shares: newShares,
+      });
     }
-
-    // Update LP metadata on-chain with new share amount
-    await updateLPMetadata(lpStorageAddress, newShares, this.poolAddress, userAddress);
-
-    // Update local tracking (but source of truth is now on-chain)
-    this.lpAccounts.set(userAddress, {
-      lpStorageAddress,
-      shares: newShares,
-      // amountA/amountB removed - calculated from current reserves on-demand
-    });
 
     this.totalShares += shares;
 
-    // Save to database (PostgreSQL)
+    // Save to database for tracking (optional - LP token balance is source of truth)
     if (this.repository) {
-      await this.repository.saveLPPosition(this.poolAddress, userAddress, newShares);
-      console.log(`✅ Database updated: ${newShares} shares for ${userAddress.slice(0, 20)}...`);
+      try {
+        const currentShares = existingLP.shares + shares;
+        await this.repository.saveLPPosition(this.poolAddress, userAddress, currentShares);
+        console.log(`✅ Database updated: ${currentShares} shares for ${userAddress.slice(0, 20)}...`);
+      } catch (dbError) {
+        console.warn(`⚠️ Database update failed (non-critical):`, dbError.message);
+        console.log(`✅ Blockchain operations succeeded, database sync skipped`);
+      }
     }
 
-    await this.saveLiquidityPositions(); // Keep for backward compatibility, but on-chain is primary
     await this.updateReserves();
 
     console.log(`✅ Added liquidity: ${amountA} tokenA + ${amountB} tokenB → ${shares} shares`);
@@ -580,28 +591,108 @@ export class Pool {
   async removeLiquidity(userAddress, liquidity, amountAMin = 0n, amountBMin = 0n) {
     await this.updateReserves();
 
-    // Get user's shares from database (PostgreSQL is source of truth)
+    // Get user's LP token balance (LP tokens are source of truth)
     let userShares = 0n;
     let totalShares = 0n;
 
-    if (this.repository) {
-      // Load from PostgreSQL database
-      const allPoolPositions = await this.repository.getLPPositions(this.poolAddress);
-      const userPosition = allPoolPositions.find(pos => pos.user_address === userAddress);
+    // If LP token address is not set, try to discover it on-chain by scanning user's wallet
+    if (!this.lpTokenAddress) {
+      console.log(`🔍 LP token address not set, discovering on-chain from user wallet...`);
+      const { getOpsClient, accountFromAddress } = await import('../utils/client.js');
+      const client = await getOpsClient();
+      const userAccount = accountFromAddress(userAddress);
 
-      if (userPosition) {
-        userShares = BigInt(userPosition.shares);
+      try {
+        // Query all user's token balances
+        const userBalances = await client.allBalances({ account: userAccount });
+
+        // Check each token's metadata to find LP token for this pool
+        for (const balance of userBalances) {
+          const tokenAddr = balance.token.publicKeyString?.toString() ?? balance.token.toString();
+
+          // Get token account info to check metadata
+          const accountsInfo = await client.client.getAccountsInfo([tokenAddr]);
+          const accountInfo = accountsInfo[tokenAddr];
+
+          if (accountInfo?.info?.metadata) {
+            try {
+              // Decode metadata
+              const metadataStr = Buffer.from(accountInfo.info.metadata, 'base64').toString('utf8');
+              const metadata = JSON.parse(metadataStr);
+
+              // Check if this is an LP token for our pool
+              if (metadata.type === 'LP_TOKEN' && metadata.pool === this.poolAddress) {
+                this.lpTokenAddress = tokenAddr;
+                console.log(`✅ Discovered LP token on-chain: ${tokenAddr.slice(0, 30)}...`);
+                break;
+              }
+            } catch (err) {
+              // Not valid JSON metadata, skip
+              continue;
+            }
+          }
+        }
+
+        if (!this.lpTokenAddress) {
+          console.log(`⚠️ No LP token found in user wallet for this pool`);
+        }
+      } catch (err) {
+        console.warn(`⚠️ Could not discover LP token on-chain:`, err.message);
+      }
+    }
+
+    if (this.lpTokenAddress) {
+      // NEW: Get balance from LP token (fungible token)
+      const { getLPTokenBalance, getBalances } = await import('../utils/client.js');
+      userShares = await getLPTokenBalance(this.lpTokenAddress, userAddress);
+
+      // Get total supply from LP token account info
+      const { getOpsClient, accountFromAddress } = await import('../utils/client.js');
+      const client = await getOpsClient();
+      const lpTokenAccount = accountFromAddress(this.lpTokenAddress);
+
+      // Query LP token account to get total supply
+      const lpTokenAccountInfo = await client.client.getAccountsInfo([this.lpTokenAddress]);
+      const lpTokenInfo = lpTokenAccountInfo[this.lpTokenAddress];
+
+      if (lpTokenInfo?.info?.supply) {
+        totalShares = BigInt(lpTokenInfo.info.supply);
+      } else {
+        // Fallback to pool state totalShares
+        totalShares = this.totalShares;
       }
 
-      // Calculate total shares from all LP positions
-      totalShares = allPoolPositions.reduce(
-        (sum, pos) => sum + BigInt(pos.shares),
-        0n
-      );
+      console.log(`🪙 LP token balance: user=${userShares}, total=${totalShares}`);
+    } else if (this.repository) {
+      // LEGACY: Load from PostgreSQL database (optional - don't fail if DB unavailable)
+      try {
+        const allPoolPositions = await this.repository.getLPPositions(this.poolAddress);
+        const userPosition = allPoolPositions.find(pos => pos.user_address === userAddress);
 
-      console.log(`📊 LP shares from database: user=${userShares}, total=${totalShares}`);
+        if (userPosition) {
+          userShares = BigInt(userPosition.shares);
+        }
+
+        // Calculate total shares from all LP positions
+        totalShares = allPoolPositions.reduce(
+          (sum, pos) => sum + BigInt(pos.shares),
+          0n
+        );
+
+        console.log(`📊 LP shares from database: user=${userShares}, total=${totalShares}`);
+      } catch (dbError) {
+        console.warn(`⚠️ Database query failed (non-critical):`, dbError.message);
+        console.log(`⚠️ Cannot load legacy LP positions from database - user must have LP tokens or use file storage`);
+
+        // Fall back to file storage
+        await this.loadLiquidityPositions();
+        const position = this.lpAccounts.get(userAddress);
+        userShares = position?.shares || 0n;
+        totalShares = this.totalShares;
+        console.log(`📁 LP shares from file fallback: user=${userShares}, total=${totalShares}`);
+      }
     } else {
-      // Fallback to local file system (legacy)
+      // LEGACY: Fallback to local file system
       await this.loadLiquidityPositions();
       const position = this.lpAccounts.get(userAddress);
       userShares = position?.shares || 0n;
@@ -657,32 +748,47 @@ export class Pool {
     // Execute transaction
     await client.publishBuilder(builder);
 
-    // Update position tracking in database
-    const newShares = userShares - liquidity;
-
-    if (this.repository) {
-      // Update PostgreSQL database
-      await this.repository.saveLPPosition(this.poolAddress, userAddress, newShares);
-      console.log(`✅ Database updated: ${newShares} shares remaining for ${userAddress.slice(0, 20)}...`);
+    // BURN LP TOKENS FROM USER (Fungible token approach - like Uniswap)
+    if (this.lpTokenAddress) {
+      console.log(`🔥 Burning ${liquidity} LP tokens from ${userAddress.slice(0, 20)}...`);
+      const { burnLPTokens } = await import('../utils/client.js');
+      await burnLPTokens(this.lpTokenAddress, userAddress, liquidity);
+      console.log(`✅ LP tokens burned successfully`);
     } else {
-      // Legacy file-based storage
-      const position = this.lpAccounts.get(userAddress);
-      if (position) {
-        position.shares -= liquidity;
+      console.warn(`⚠️ Pool ${this.poolAddress.slice(-8)} has no LP token - using legacy storage account approach`);
 
-        if (position.shares === 0n) {
-          this.lpAccounts.delete(userAddress);
-          console.log(`✅ User position fully removed`);
-        } else {
-          this.lpAccounts.set(userAddress, position);
-          console.log(`✅ User still has ${position.shares} shares remaining`);
+      // LEGACY: Update position tracking in database/files
+      const newShares = userShares - liquidity;
+
+      if (this.repository) {
+        // Update PostgreSQL database (optional - don't fail if DB is unavailable)
+        try {
+          await this.repository.saveLPPosition(this.poolAddress, userAddress, newShares);
+          console.log(`✅ Database updated: ${newShares} shares remaining for ${userAddress.slice(0, 20)}...`);
+        } catch (dbError) {
+          console.warn(`⚠️ Database update failed (non-critical):`, dbError.message);
+          console.log(`✅ Blockchain operations succeeded, database sync skipped`);
         }
-      }
+      } else {
+        // Legacy file-based storage
+        const position = this.lpAccounts.get(userAddress);
+        if (position) {
+          position.shares -= liquidity;
 
-      this.totalShares -= liquidity;
-      await this.saveLiquidityPositions();
+          if (position.shares === 0n) {
+            this.lpAccounts.delete(userAddress);
+            console.log(`✅ User position fully removed`);
+          } else {
+            this.lpAccounts.set(userAddress, position);
+            console.log(`✅ User still has ${position.shares} shares remaining`);
+          }
+        }
+
+        await this.saveLiquidityPositions();
+      }
     }
 
+    this.totalShares -= liquidity;
     await this.updateReserves();
 
     console.log(`✅ Removed liquidity: ${liquidity} shares → ${amountA} tokenA + ${amountB} tokenB`);
@@ -725,6 +831,7 @@ export class Pool {
       reserveAHuman: fromAtomic(this.reserveA, this.decimalsA),
       reserveBHuman: fromAtomic(this.reserveB, this.decimalsB),
       totalLPSupply: this.totalShares.toString(),  // Use totalShares (backwards compatible field name)
+      lpTokenAddress: this.lpTokenAddress || null,  // Include LP token address
       priceAtoB: price.priceAtoB,
       priceBtoA: price.priceBtoA,
       decimalsA: this.decimalsA,

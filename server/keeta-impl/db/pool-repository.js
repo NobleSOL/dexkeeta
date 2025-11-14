@@ -123,4 +123,19 @@ export class PoolRepository {
     const query = 'DELETE FROM lp_positions WHERE pool_address = $1 AND user_address = $2;';
     await pool.query(query, [poolAddress, userAddress]);
   }
+
+  /**
+   * Update pool with LP token address (for migration)
+   */
+  async updatePoolLPToken(poolAddress, lpTokenAddress) {
+    const pool = getDbPool();
+    const query = `
+      UPDATE pools
+      SET lp_token_address = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE pool_address = $2
+      RETURNING *;
+    `;
+    const result = await pool.query(query, [lpTokenAddress, poolAddress]);
+    return result.rows[0];
+  }
 }

@@ -170,6 +170,43 @@ export default function KeetaDex() {
     }
   }, [wallet?.address]);
 
+  // Merge backend pools with pools discovered from user's LP tokens (on-chain discovery)
+  const allPools = React.useMemo(() => {
+    const poolMap = new Map<string, KeetaPool>();
+
+    // Add all backend pools
+    pools.forEach(pool => {
+      poolMap.set(pool.poolAddress, pool);
+    });
+
+    // Add pools from user's LP token positions (on-chain discovery!)
+    positions.forEach(position => {
+      if (!poolMap.has(position.poolAddress)) {
+        // This pool isn't in the backend - add it from on-chain data!
+        console.log(`🔍 Discovered pool from LP token: ${position.symbolA}/${position.symbolB}`);
+        poolMap.set(position.poolAddress, {
+          poolAddress: position.poolAddress,
+          tokenA: position.tokenA,
+          tokenB: position.tokenB,
+          symbolA: position.symbolA,
+          symbolB: position.symbolB,
+          // We'll need to fetch reserves on-chain, but for now use empty values
+          // The position data has the user's share already calculated
+          reserveA: '0',
+          reserveB: '0',
+          reserveAHuman: 0,
+          reserveBHuman: 0,
+          price: '0',
+          totalShares: position.liquidity, // Use user's liquidity as a placeholder
+          decimalsA: 9,
+          decimalsB: 9,
+        });
+      }
+    });
+
+    return Array.from(poolMap.values());
+  }, [pools, positions]);
+
   // Auto-refresh balances every 30 seconds while wallet is connected
   useEffect(() => {
     if (!wallet?.address) return;
@@ -1044,14 +1081,14 @@ export default function KeetaDex() {
                     <CardDescription>View all pools and manage your positions</CardDescription>
                   </CardHeader>
                   <CardContent className="overflow-visible">
-                    {pools.length === 0 ? (
+                    {allPools.length === 0 ? (
                       <div className="text-center py-12 text-muted-foreground">
                         <Droplets className="h-12 w-12 mx-auto mb-4 opacity-50" />
                         <p>No pools yet. Be the first to create one!</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                        {pools.map((pool) => {
+                        {allPools.map((pool) => {
                           // Find user's position in this pool
                           const userPosition = positions.find(
                             (p) => p.poolAddress === pool.poolAddress

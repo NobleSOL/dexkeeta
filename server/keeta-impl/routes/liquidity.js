@@ -230,8 +230,9 @@ router.post('/register-pool', async (req, res) => {
 
     const poolManager = await getPoolManager();
 
-    // Transfer ownership and grant ops permissions
-    await poolManager.transferPoolOwnership(poolAddress, creatorAddress, tokenA, tokenB);
+    // Note: In centralized liquidity model, OPS creates and owns all pools
+    // This endpoint is for registering pools created outside the system
+    // No ownership transfer needed - pools are registered as-is
 
     // Create and register pool instance
     const pool = new Pool(poolAddress, tokenA, tokenB);

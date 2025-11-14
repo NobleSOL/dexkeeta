@@ -262,16 +262,13 @@ async function fetchPoolReserves(poolAddress: string, tokenA: string, tokenB: st
 }
 
 /**
- * Fetch available pools with live reserves from blockchain
- * Uses hardcoded pool list + fetches reserves directly from chain
+ * Fetch available pools with live reserves and LP token supply from blockchain
  */
 export async function fetchPools() {
   try {
-    // Fetch pools from backend API
+    // Fetch pools from backend API (for pool list and metadata)
     const API_BASE = import.meta.env.VITE_KEETA_API_BASE || `${window.location.origin}/api`;
     console.log('🔍 fetchPools - API_BASE:', API_BASE);
-    console.log('🔍 fetchPools - window.location.origin:', window.location.origin);
-    console.log('🔍 fetchPools - VITE_KEETA_API_BASE:', import.meta.env.VITE_KEETA_API_BASE);
 
     const fullUrl = `${API_BASE}/pools`;
     console.log('🔍 fetchPools - Fetching from:', fullUrl);
@@ -292,23 +289,66 @@ export async function fetchPools() {
 
     console.log(`✅ fetchPools - Successfully fetched ${data.pools.length} pools`);
 
-    // The backend already provides all the pool data we need
-    return data.pools.map((pool: any) => ({
-      poolAddress: pool.poolAddress,
-      tokenA: pool.tokenA,
-      tokenB: pool.tokenB,
-      symbolA: pool.symbolA,
-      symbolB: pool.symbolB,
-      decimalsA: pool.decimalsA,
-      decimalsB: pool.decimalsB,
-      reserveA: pool.reserveA,
-      reserveB: pool.reserveB,
-      reserveAHuman: pool.reserveAHuman,
-      reserveBHuman: pool.reserveBHuman,
-      totalShares: pool.totalLPSupply || '0',
-      priceAtoB: pool.priceAtoB,
-      priceBtoA: pool.priceBtoA,
-    }));
+    // Create client for querying LP token supplies
+    const client = createKeetaClient();
+
+    // Enhance pool data with on-chain LP token total supply
+    const poolsWithLPSupply = await Promise.all(
+      data.pools.map(async (pool: any) => {
+        let totalLPSupply = '0';
+
+        // Try to fetch the actual LP token total supply from blockchain
+        if (pool.lpTokenAddress) {
+          try {
+            console.log(`🔍 Fetching LP token supply for pool ${pool.poolAddress.slice(-8)}: ${pool.lpTokenAddress.slice(-8)}`);
+
+            // Get LP token account info to check its supply
+            // Handle both browser and Node.js SDK structures
+            let lpTokenInfo;
+            if ((client as any).client?.getAccountsInfo) {
+              const accountsInfo = await (client as any).client.getAccountsInfo([pool.lpTokenAddress]);
+              lpTokenInfo = accountsInfo[pool.lpTokenAddress];
+            } else if ((client as any).getAccountsInfo) {
+              const accountsInfo = await (client as any).getAccountsInfo([pool.lpTokenAddress]);
+              lpTokenInfo = accountsInfo[pool.lpTokenAddress];
+            }
+
+            if (lpTokenInfo?.info?.supply) {
+              totalLPSupply = lpTokenInfo.info.supply.toString();
+              console.log(`✅ LP token supply from chain: ${totalLPSupply}`);
+            }
+          } catch (err) {
+            console.warn(`Could not fetch LP supply for pool ${pool.poolAddress.slice(-8)}:`, err);
+          }
+        }
+
+        // Fall back to backend's totalLPSupply if we couldn't fetch from chain
+        if (totalLPSupply === '0' && pool.totalLPSupply) {
+          totalLPSupply = pool.totalLPSupply;
+          console.log(`📊 Using backend totalLPSupply: ${totalLPSupply}`);
+        }
+
+        return {
+          poolAddress: pool.poolAddress,
+          lpTokenAddress: pool.lpTokenAddress,
+          tokenA: pool.tokenA,
+          tokenB: pool.tokenB,
+          symbolA: pool.symbolA,
+          symbolB: pool.symbolB,
+          decimalsA: pool.decimalsA,
+          decimalsB: pool.decimalsB,
+          reserveA: pool.reserveA,
+          reserveB: pool.reserveB,
+          reserveAHuman: pool.reserveAHuman,
+          reserveBHuman: pool.reserveBHuman,
+          totalShares: totalLPSupply,
+          priceAtoB: pool.priceAtoB,
+          priceBtoA: pool.priceBtoA,
+        };
+      })
+    );
+
+    return poolsWithLPSupply;
   } catch (error) {
     console.error('❌ Error fetching pools:', error);
     return [];
@@ -316,35 +356,155 @@ export async function fetchPools() {
 }
 
 /**
- * Fetch user's liquidity positions from blockchain
- * This queries the user's token balances and identifies LP tokens for known pools
+ * Fetch user's liquidity positions DIRECTLY FROM BLOCKCHAIN
+ * This queries the user's LP token balances on-chain (no backend required!)
  */
 export async function fetchLiquidityPositions(seed: string, accountIndex: number = 0) {
   try {
-    console.log('🔍 Fetching liquidity positions from backend...');
+    console.log('🔍 Fetching liquidity positions from blockchain...');
 
-    // Get user address from seed
-    const userAddress = getAddressFromSeed(seed, accountIndex);
+    // Create account from seed
+    const seedBytes = hexToBytes(seed);
+    const account = KeetaSDK.lib.Account.fromSeed(seedBytes, accountIndex);
+    const userAddress = account.publicKeyString.get();
     console.log('📍 User address:', userAddress);
 
-    // Call backend API to get positions (use absolute URL for Vercel frontend + Render backend)
-    const API_BASE = import.meta.env.VITE_KEETA_API_BASE || `${window.location.origin}/api`;
-    const response = await fetch(`${API_BASE}/liquidity/positions/${userAddress}`);
+    // Create client
+    const client = KeetaSDK.UserClient.fromNetwork(KEETA_NETWORK as any, account);
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch positions: ${response.statusText}`);
+    // Fetch all token balances
+    const rawBalances = await client.allBalances({ account });
+    console.log(`📊 Found ${rawBalances.length} token balances on-chain`);
+
+    // Filter for LP tokens and extract position data
+    const positions = [];
+
+    for (const b of rawBalances) {
+      try {
+        const tokenAddress = b.token.publicKeyString?.toString() ?? b.token.toString();
+        const balanceValue = BigInt(b.balance ?? 0n);
+
+        // Skip if balance is zero
+        if (balanceValue === 0n) continue;
+
+        // Fetch token metadata to check if it's an LP token
+        console.log(`🔍 Checking token ${tokenAddress.slice(0, 20)}...`);
+
+        // Try to get account info - handle both browser and Node.js SDK structures
+        let accountInfo;
+        try {
+          // Try nested client first (Node.js structure)
+          if ((client as any).client?.getAccountsInfo) {
+            const accountsInfo = await (client as any).client.getAccountsInfo([tokenAddress]);
+            accountInfo = accountsInfo[tokenAddress];
+          }
+          // Fall back to direct method (browser structure)
+          else if ((client as any).getAccountsInfo) {
+            const accountsInfo = await (client as any).getAccountsInfo([tokenAddress]);
+            accountInfo = accountsInfo[tokenAddress];
+          }
+          else {
+            console.log(`  ❌ getAccountsInfo not available, skipping`);
+            continue;
+          }
+        } catch (err) {
+          console.log(`  ❌ Error fetching account info: ${err}, skipping`);
+          continue;
+        }
+
+        if (!accountInfo?.info?.metadata) {
+          console.log(`  ❌ No metadata, skipping`);
+          continue;
+        }
+
+        // Decode metadata
+        let metadata;
+        try {
+          const metadataStr = atob(accountInfo.info.metadata);
+          metadata = JSON.parse(metadataStr);
+        } catch (err) {
+          console.log(`  ❌ Could not parse metadata, skipping`);
+          continue;
+        }
+
+        // Check if this is an LP token
+        if (metadata.type !== 'LP_TOKEN') {
+          console.log(`  ❌ Not an LP token (type: ${metadata.type}), skipping`);
+          continue;
+        }
+
+        console.log(`  ✅ Found LP token! Pool: ${metadata.pool}`);
+
+        // Query pool data DIRECTLY from blockchain (don't rely on backend!)
+        const poolAddress = metadata.pool;
+        const tokenA = metadata.tokenA;
+        const tokenB = metadata.tokenB;
+
+        // Fetch pool reserves from blockchain
+        const poolAccount = KeetaSDK.lib.Account.fromPublicKeyString(poolAddress);
+        const poolBalances = await client.allBalances({ account: poolAccount });
+
+        let reserveA = 0n;
+        let reserveB = 0n;
+
+        for (const pb of poolBalances) {
+          const pTokenAddr = pb.token.publicKeyString?.toString() ?? pb.token.toString();
+          const pBalance = BigInt(pb.balance ?? 0n);
+
+          if (pTokenAddr === tokenA) reserveA = pBalance;
+          if (pTokenAddr === tokenB) reserveB = pBalance;
+        }
+
+        // Fetch token metadata for symbols
+        const metadataA = await fetchTokenMetadata(tokenA);
+        const metadataB = await fetchTokenMetadata(tokenB);
+        const symbolA = metadataA.symbol;
+        const symbolB = metadataB.symbol;
+        const decimalsA = metadataA.decimals || 9;
+        const decimalsB = metadataB.decimals || 9;
+
+        // Get LP token total supply from accountInfo we already fetched
+        const totalShares = BigInt(accountInfo.info?.supply || '0');
+        const userShares = balanceValue;
+        const sharePercent = totalShares > 0n
+          ? (Number(userShares) / Number(totalShares)) * 100
+          : 0;
+
+        // Calculate user's amounts of tokenA and tokenB
+        let amountA = '0';
+        let amountB = '0';
+
+        if (totalShares > 0n) {
+          const amountABigInt = (reserveA * userShares) / totalShares;
+          const amountBBigInt = (reserveB * userShares) / totalShares;
+          amountA = (Number(amountABigInt) / Math.pow(10, decimalsA)).toFixed(6);
+          amountB = (Number(amountBBigInt) / Math.pow(10, decimalsB)).toFixed(6);
+        }
+
+        positions.push({
+          poolAddress,
+          lpTokenAddress: tokenAddress,
+          tokenA,
+          tokenB,
+          symbolA,
+          symbolB,
+          liquidity: userShares.toString(),
+          sharePercent,
+          amountA,
+          amountB,
+          timestamp: metadata.createdAt || Date.now(),
+        });
+
+        console.log(`  📋 Position: ${sharePercent.toFixed(4)}% of ${symbolA}/${symbolB} pool`);
+      } catch (err) {
+        console.error('Error processing token balance:', err);
+      }
     }
 
-    const result = await response.json();
-
-    if (!result.success) {
-      throw new Error(result.error || 'Unknown error fetching positions');
-    }
-
-    console.log('✅ Found positions from backend:', result.positions);
-    return result.positions || [];
+    console.log(`✅ Found ${positions.length} LP positions on-chain`);
+    return positions;
   } catch (error) {
-    console.error('Error fetching liquidity positions:', error);
+    console.error('Error fetching liquidity positions from blockchain:', error);
     return [];
   }
 }

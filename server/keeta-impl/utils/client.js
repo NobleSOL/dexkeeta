@@ -7,6 +7,15 @@ let treasuryAccount = null;
 let opsAccount = null;
 
 /**
+ * Reset the ops client (clears cached votes)
+ */
+export function resetOpsClient() {
+  opsClient = null;
+  opsAccount = null;
+  console.log('🔄 Ops client reset');
+}
+
+/**
  * Initialize and return a singleton UserClient for operations
  */
 export async function getOpsClient() {
@@ -375,8 +384,195 @@ export async function createStorageAccount(name, description, isPool = false) {
   return marketId;
 }
 
-// LP token functions removed - see legacy-lp-tokens/ folder
-// Keeta pools use STORAGE accounts, not separate TOKEN accounts for LP tokens
+// ============================================
+// LP TOKEN FUNCTIONS (Fungible Tokens)
+// ============================================
+// These functions create/manage REAL fungible LP tokens (not storage metadata)
+// LP tokens represent pool shares and are tradeable/composable
+
+/**
+ * Create a fungible LP token for a liquidity pool
+ * This creates an actual Keeta token (like ERC-20) that represents pool shares
+ *
+ * @param {string} poolAddress - Pool storage account address
+ * @param {string} tokenA - Token A address
+ * @param {string} tokenB - Token B address
+ * @returns {Promise<string>} LP token address
+ */
+export async function createLPToken(poolAddress, tokenA, tokenB) {
+  const client = await getOpsClient();
+  const ops = getOpsAccount();
+
+  console.log(`📝 Creating LP token for pool ${poolAddress.slice(-8)}...`);
+
+  // Fetch token symbols for human-readable LP token name
+  let symbolA = 'TKA';
+  let symbolB = 'TKB';
+  try {
+    const [metadataA, metadataB] = await Promise.all([
+      fetchTokenMetadata(tokenA),
+      fetchTokenMetadata(tokenB)
+    ]);
+    symbolA = metadataA.symbol || 'TKA';
+    symbolB = metadataB.symbol || 'TKB';
+  } catch (err) {
+    console.warn(`⚠️ Could not fetch token symbols, using defaults`);
+  }
+
+  const builder = client.initBuilder();
+
+  // Generate new token account for LP token
+  const pending = builder.generateIdentifier(
+    KeetaNet.lib.Account.AccountKeyAlgorithm.TOKEN
+  );
+  await builder.computeBlocks();
+
+  const lpTokenAccount = pending.account;
+  const lpTokenAddress = lpTokenAccount.publicKeyString.toString();
+
+  // Set token info (ERC-20 style fungible token)
+  // Note: Keeta token names must be uppercase letters and underscores only
+  // Metadata must be base64 encoded
+  const metadataObj = {
+    type: 'LP_TOKEN',
+    pool: poolAddress,
+    tokenA,
+    tokenB,
+    createdAt: Date.now()
+  };
+  const metadataBase64 = Buffer.from(JSON.stringify(metadataObj)).toString('base64');
+
+  builder.setInfo(
+    {
+      name: `${symbolA}_${symbolB}_LP`,
+      description: `Liquidity Provider token for ${symbolA}/${symbolB} pool`,
+      metadata: metadataBase64,
+      defaultPermission: new KeetaNet.lib.Permissions([
+        'ACCESS',
+      ]),
+    },
+    { account: lpTokenAccount }
+  );
+
+  // Grant OPS OWNER permission to manage LP token supply
+  builder.updatePermissions(
+    ops,
+    new KeetaNet.lib.Permissions([
+      'OWNER',
+    ]),
+    undefined,
+    undefined,
+    { account: lpTokenAccount }
+  );
+
+  // Publish the transaction
+  await client.publishBuilder(builder);
+
+  console.log(`✅ LP token created: ${lpTokenAddress}`);
+  console.log(`   Symbol: ${symbolA}-${symbolB}-LP`);
+  console.log(`   Pool: ${poolAddress.slice(-8)}`);
+
+  return lpTokenAddress;
+}
+
+/**
+ * Mint LP tokens to a user when they add liquidity
+ *
+ * @param {string} lpTokenAddress - LP token address
+ * @param {string} recipientAddress - User address to receive LP tokens
+ * @param {bigint} amount - Amount of LP tokens to mint
+ */
+export async function mintLPTokens(lpTokenAddress, recipientAddress, amount) {
+  const client = await getOpsClient();
+
+  console.log(`🪙 Minting ${amount} LP tokens to ${recipientAddress.slice(0, 20)}...`);
+
+  const lpTokenAccount = accountFromAddress(lpTokenAddress);
+  const recipientAccount = accountFromAddress(recipientAddress);
+
+  // Step 1: Mint tokens (they go to LP token account's own balance)
+  const builder1 = client.initBuilder();
+  builder1.modifyTokenSupply(amount, { account: lpTokenAccount });
+  await client.publishBuilder(builder1);
+
+  console.log(`🔄 Tokens minted in LP token account, transferring to recipient...`);
+
+  // Wait for finalization before sending
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // Step 2: Send FROM LP token account TO recipient
+  // Using { account: lpTokenAccount } to specify sending FROM the token account
+  const builder2 = client.initBuilder();
+  builder2.send(
+    recipientAccount,              // TO: recipient wallet
+    amount,                        // amount to send
+    lpTokenAccount,                // which token
+    undefined,                     // no external ref
+    { account: lpTokenAccount }    // FROM: LP token account
+  );
+  await client.publishBuilder(builder2);
+
+  console.log(`✅ Minted ${amount} LP tokens to ${recipientAddress.slice(0, 20)}...`);
+}
+
+/**
+ * Burn LP tokens from a user when they remove liquidity
+ * OPS burns the tokens on behalf of the user (user must approve first)
+ *
+ * @param {string} lpTokenAddress - LP token address
+ * @param {string} userAddress - User address whose LP tokens to burn
+ * @param {bigint} amount - Amount of LP tokens to burn
+ */
+export async function burnLPTokens(lpTokenAddress, userAddress, amount) {
+  const client = await getOpsClient();
+  const ops = getOpsAccount();
+  const opsAddress = ops.publicKeyString.get();
+
+  console.log(`🔥 Burning ${amount} LP tokens from ${userAddress.slice(0, 20)}...`);
+
+  const builder = client.initBuilder();
+
+  const lpTokenAccount = accountFromAddress(lpTokenAddress);
+  const userAccount = accountFromAddress(userAddress);
+
+  // ALWAYS send LP tokens from user to LP token account first (regardless of who the user is)
+  // This is necessary because modifyTokenSupply burns from the LP token account's balance
+  console.log(`  📤 Sending ${amount} LP tokens from user to LP token account...`);
+  if (userAddress === opsAddress) {
+    // OPS sends from their own balance
+    builder.send(lpTokenAccount, amount, lpTokenAccount, undefined, { account: ops });
+  } else {
+    // OPS sends on behalf of user using SEND_ON_BEHALF
+    builder.send(lpTokenAccount, amount, lpTokenAccount, undefined, { account: userAccount });
+  }
+
+  // Now burn from LP token account (which now has the tokens)
+  console.log(`  🔥 Decreasing LP token supply by ${amount}...`);
+  builder.modifyTokenSupply(-amount, { account: lpTokenAccount });
+
+  await client.publishBuilder(builder);
+
+  console.log(`✅ Burned ${amount} LP tokens from ${userAddress.slice(0, 20)}...`);
+}
+
+/**
+ * Get LP token balance for a user
+ *
+ * @param {string} lpTokenAddress - LP token address
+ * @param {string} userAddress - User address
+ * @returns {Promise<bigint>} LP token balance
+ */
+export async function getLPTokenBalance(lpTokenAddress, userAddress) {
+  const balances = await getBalances(userAddress);
+
+  for (const balance of balances) {
+    if (balance.token === lpTokenAddress) {
+      return BigInt(balance.balance);
+    }
+  }
+
+  return 0n;
+}
 
 /**
  * Helper to create Account objects from addresses

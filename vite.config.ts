@@ -1,17 +1,21 @@
 import { defineConfig, Plugin } from "vite";
-import react from "@vitejs/plugin-react-swc";
+import react from "@vitejs/plugin-react";
 import path from "path";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 // https://vitejs.dev/config/
 export default defineConfig(async ({ mode }) => {
-  const plugins = [react(), tsconfigPaths()];
+  const plugins = [
+    react({
+      jsxRuntime: 'automatic',
+    }),
+    tsconfigPaths()
+  ];
 
   // Only add express plugin in development mode
   // In production, the server is run separately via node-build.ts
-  if (mode === 'development' && process.env.NODE_ENV !== 'production') {
+  if (mode === 'development') {
     // Dynamically import the plugin only in dev mode
-    // Using eval to prevent static analysis from trying to resolve the path
     const expressPlugin: Plugin = {
       name: "express-plugin",
       apply: "serve",
@@ -36,6 +40,7 @@ export default defineConfig(async ({ mode }) => {
     },
     build: {
       outDir: "dist/spa",
+      minify: 'esbuild', // Ensure minification is enabled
       rollupOptions: {
         output: {
           manualChunks: {
@@ -53,6 +58,10 @@ export default defineConfig(async ({ mode }) => {
         },
       },
       chunkSizeWarningLimit: 1000, // Increase limit to 1MB to reduce warnings
+    },
+    esbuild: {
+      // Configure esbuild for proper production builds
+      drop: mode === 'production' ? ['console', 'debugger'] : [],
     },
     plugins,
     resolve: {

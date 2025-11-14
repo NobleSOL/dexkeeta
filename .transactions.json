@@ -1,6 +1,17 @@
 [
   {
     "type": "SWAP_FORWARD",
+    "timestamp": 1763060073890,
+    "user": "keeta_aabtozgfunwwvwdztv54y6l5x57q2g3254shgp27zjltr2xz3pyo7q4tjtmsamy",
+    "pool": "keeta_atxpnzr2b2hqtkv5n4mvtfts3kw27rf5jow4rae45xknveq4anb2zqxq2dsz2",
+    "tokenIn": "keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo",
+    "tokenOut": "keeta_apkuewquwvrain2g7nkgqaobpiqy77qosl52dfheqyhbt4dfozdn5lmzmqh7w",
+    "amountIn": "10000",
+    "amountOut": "195501696",
+    "priceImpact": "1.9550170511534626"
+  },
+  {
+    "type": "SWAP_FORWARD",
     "timestamp": 1762560037202,
     "user": "keeta_aabtozgfunwwvwdztv54y6l5x57q2g3254shgp27zjltr2xz3pyo7q4tjtmsamy",
     "pool": "keeta_atzfyx6ocqbxup5djw75nikn5nvafhsj3kkl7g7ohlm6hbgzspxip4bahp34u",
