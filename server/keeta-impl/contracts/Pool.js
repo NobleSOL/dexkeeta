@@ -233,39 +233,60 @@ export class Pool {
     }
 
     const { getOpsClient } = await import('../utils/client.js');
+    const { CONFIG } = await import('../utils/constants.js');
+    const treasury = getTreasuryAccount();
 
     const tokenInAccount = accountFromAddress(tokenIn);
     const tokenOutAccount = accountFromAddress(tokenOut);
     const userAccount = accountFromAddress(userAddress);
     const poolAccount = accountFromAddress(this.poolAddress);
+    const treasuryAccount = treasury;
+
+    // Calculate fee split (SushiSwap model)
+    // Total fee: 0.3% (used for AMM calculation)
+    // Split: 0.25% to LPs (stays in pool), 0.05% to protocol (treasury)
+    const protocolFee = (amountIn * BigInt(CONFIG.PROTOCOL_FEE_BPS)) / 10000n;  // 0.05%
+    const amountToPool = amountIn - protocolFee;                                 // 99.95%
+    const lpFeeAmount = feeAmount - protocolFee;                                 // 0.25%
 
     console.log(`🔄 SWAP REQUEST: ${amountIn} ${tokenIn.slice(0, 12)}... → ${amountOut} ${tokenOut.slice(0, 12)}...`);
     console.log(`   User: ${userAddress.slice(0, 12)}...`);
-    console.log(`   Fee: ${feeAmount} (stays in pool to benefit LPs)`);
+    console.log(`   Total Fee: ${feeAmount} (0.3%)`);
+    console.log(`   ├─ LP Fee: ${lpFeeAmount} (0.25% - stays in pool)`);
+    console.log(`   └─ Protocol Fee: ${protocolFee} (0.05% - to treasury)`);
 
     // ============================================================================
-    // SIMPLE TWO-TRANSACTION SWAP ARCHITECTURE (Uniswap V2 Model)
+    // SIMPLE TWO-TRANSACTION SWAP ARCHITECTURE (SushiSwap Model)
     // ============================================================================
-    // TX1: User sends FULL amountIn to pool (including fee)
+    // TX1: User sends amountIn, split between pool and treasury
+    //     - Pool gets 99.95% (includes 0.25% LP fee in reserves)
+    //     - Treasury gets 0.05% (protocol fee)
     // TX2: Pool sends amountOut to user (using SEND_ON_BEHALF)
     //
-    // The fee stays in the pool reserves, increasing LP token value over time.
-    // This is the standard Uniswap V2 fee distribution mechanism.
+    // AMM calculation uses 0.3% total fee for price impact.
+    // LPs earn 0.25% (stays in pool reserves, increases LP token value).
+    // Protocol earns 0.05% (sent to treasury for operations).
     // ============================================================================
 
-    // TX1: User sends full amountIn to pool (fee stays in pool for LPs)
-    console.log('📝 TX1: User sends tokenIn to pool (fee included for LPs)...');
+    // TX1: User sends tokenIn, split between pool and treasury
+    console.log('📝 TX1: User sends tokenIn (split: pool + treasury)...');
     const tx1Builder = userClient.initBuilder();
 
-    // Send FULL amountIn to pool (fee stays in reserves to benefit LP token holders)
-    tx1Builder.send(poolAccount, amountIn, tokenInAccount);
+    // Send to pool (99.95% - includes LP fee in reserves)
+    tx1Builder.send(poolAccount, amountToPool, tokenInAccount);
+
+    // Send protocol fee to treasury (0.05%)
+    if (protocolFee > 0n) {
+      tx1Builder.send(treasuryAccount, protocolFee, tokenInAccount);
+    }
 
     await userClient.publishBuilder(tx1Builder);
 
     // Extract TX1 block hash from builder.blocks array
     // This is the transaction where user sends tokens to pool (shown in explorer)
     // Transaction structure:
-    // Block 0: User sends tokenIn to pool (including fee for LPs) <- THIS ONE for explorer
+    // Block 0: User sends tokenIn to pool (99.95% - includes LP fee) <- THIS ONE for explorer
+    // Block 1: User sends protocol fee to treasury (0.05%)
     let tx1Hash = null;
     if (tx1Builder.blocks && tx1Builder.blocks.length > 0) {
       // Use index 0 (first block) - the user sends tokenIn to pool
@@ -293,7 +314,9 @@ export class Pool {
       }
     }
 
-    console.log(`✅ TX1 published (hash: ${tx1Hash || 'NOT_CAPTURED'}): User sent ${amountIn} tokenIn to pool (includes ${feeAmount} fee for LPs)`);
+    console.log(`✅ TX1 published (hash: ${tx1Hash || 'NOT_CAPTURED'}):`);
+    console.log(`   Pool received: ${amountToPool} (includes ${lpFeeAmount} LP fee)`);
+    console.log(`   Treasury received: ${protocolFee} (protocol fee)`);
 
     // Wait briefly for TX1 to be processed
     await new Promise(resolve => setTimeout(resolve, 1000));

@@ -7,7 +7,9 @@ export const CONFIG = {
   NODE_HTTP: process.env.NODE_HTTP || 'https://api.test.keeta.com',
   
   // Fees (basis points: 30 = 0.3%)
-  SWAP_FEE_BPS: Number(process.env.SWAP_FEE_BPS || 30),
+  SWAP_FEE_BPS: Number(process.env.SWAP_FEE_BPS || 30),           // Total: 0.3%
+  LP_FEE_BPS: Number(process.env.LP_FEE_BPS || 25),               // LP: 0.25% (stays in pool)
+  PROTOCOL_FEE_BPS: Number(process.env.PROTOCOL_FEE_BPS || 5),    // Protocol: 0.05% (to treasury)
   
   // Known tokens
   BASE_TOKEN: process.env.BASE_TOKEN || 'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52',
