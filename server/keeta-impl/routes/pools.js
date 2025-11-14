@@ -177,4 +177,38 @@ router.get('/exists/:tokenA/:tokenB', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/pools/debug/loaded
+ * Debug endpoint to see what pools are loaded in memory
+ */
+router.get('/debug/loaded', async (req, res) => {
+  try {
+    const poolManager = await getPoolManager();
+
+    const loadedPools = [];
+    for (const [pairKey, pool] of poolManager.pools.entries()) {
+      loadedPools.push({
+        pairKey,
+        poolAddress: pool.poolAddress,
+        tokenA: pool.tokenA,
+        tokenB: pool.tokenB,
+        lpTokenAddress: pool.lpTokenAddress,
+        creator: pool.creator,
+      });
+    }
+
+    res.json({
+      success: true,
+      totalPools: loadedPools.length,
+      pools: loadedPools,
+    });
+  } catch (error) {
+    console.error('Debug pools error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;
