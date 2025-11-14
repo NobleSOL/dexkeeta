@@ -444,7 +444,7 @@ export async function createLPToken(poolAddress, tokenA, tokenB) {
 
   builder.setInfo(
     {
-      name: 'SILVERBACK_LP_TOKEN',
+      name: `${symbolA}_${symbolB}_LP`,
       description: `Liquidity Provider token for ${symbolA}/${symbolB} pool`,
       metadata: metadataBase64,
       defaultPermission: new KeetaNet.lib.Permissions([
