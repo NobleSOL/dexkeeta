@@ -1,6 +1,94 @@
 [
   {
     "type": "SWAP_FORWARD",
+    "timestamp": 1763128093026,
+    "user": "keeta_aabfr6xymyr764dtcd5xc3xrgxeuq6bekoxupa63zn53saoooo2dnfiekjkhxly",
+    "pool": "keeta_asoiiztu2atjbdvmhbe6cur3gbawfvlvwvkmilx6n4bqwnt7odd6t4udkxd5u",
+    "tokenIn": "keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym",
+    "tokenOut": "keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52",
+    "amountIn": "100000000",
+    "amountOut": "1955016",
+    "priceImpact": "1.9550651955867582"
+  },
+  {
+    "type": "SWAP_FORWARD",
+    "timestamp": 1763127875032,
+    "user": "keeta_aabfr6xymyr764dtcd5xc3xrgxeuq6bekoxupa63zn53saoooo2dnfiekjkhxly",
+    "pool": "keeta_asxz52bcb75jpznhcky5swdp5754zuzpvsyoexijbatnca5raf6sdl4qz6b5w",
+    "tokenIn": "keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo",
+    "tokenOut": "keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym",
+    "amountIn": "100000",
+    "amountOut": "9491202929",
+    "priceImpact": "0.9680457548336352"
+  },
+  {
+    "type": "SWAP_FORWARD",
+    "timestamp": 1763127773060,
+    "user": "keeta_aabfr6xymyr764dtcd5xc3xrgxeuq6bekoxupa63zn53saoooo2dnfiekjkhxly",
+    "pool": "keeta_asxz52bcb75jpznhcky5swdp5754zuzpvsyoexijbatnca5raf6sdl4qz6b5w",
+    "tokenIn": "keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo",
+    "tokenOut": "keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym",
+    "amountIn": "100000",
+    "amountOut": "9678589273",
+    "priceImpact": "0.9775084896849751"
+  },
+  {
+    "type": "SWAP_FORWARD",
+    "timestamp": 1763127732029,
+    "user": "keeta_aabfr6xymyr764dtcd5xc3xrgxeuq6bekoxupa63zn53saoooo2dnfiekjkhxly",
+    "pool": "keeta_arfsjmvr3zbr6h5nviyhcf3nolfdrrwupidas2e4pyt7im5m26fvexq5rdjxg",
+    "tokenIn": "keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52",
+    "tokenOut": "keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo",
+    "amountIn": "10000000",
+    "amountOut": "483929",
+    "priceImpact": "0.9776033968605491"
+  },
+  {
+    "type": "SWAP_FORWARD",
+    "timestamp": 1763127500769,
+    "user": "keeta_aabqrcutk5ufa6ok4hu2ysa2qgiyjhnb23gexoy65l473qqoliyydd6ema25khi",
+    "pool": "keeta_asxz52bcb75jpznhcky5swdp5754zuzpvsyoexijbatnca5raf6sdl4qz6b5w",
+    "tokenIn": "keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo",
+    "tokenOut": "keeta_ant6bsl2obpmreopln5e242s3ihxyzjepd6vbkeoz3b3o3pxjtlsx3saixkym",
+    "amountIn": "100000",
+    "amountOut": "9871580343",
+    "priceImpact": "0.9871580441324079"
+  },
+  {
+    "type": "SWAP_FORWARD",
+    "timestamp": 1763127293266,
+    "user": "keeta_aabqrcutk5ufa6ok4hu2ysa2qgiyjhnb23gexoy65l473qqoliyydd6ema25khi",
+    "pool": "keeta_arfsjmvr3zbr6h5nviyhcf3nolfdrrwupidas2e4pyt7im5m26fvexq5rdjxg",
+    "tokenIn": "keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52",
+    "tokenOut": "keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo",
+    "amountIn": "10000000",
+    "amountOut": "493579",
+    "priceImpact": "0.9871614844533694"
+  },
+  {
+    "type": "SWAP_FORWARD",
+    "timestamp": 1763100010482,
+    "user": "keeta_aabqrcutk5ufa6ok4hu2ysa2qgiyjhnb23gexoy65l473qqoliyydd6ema25khi",
+    "pool": "keeta_arfsjmvr3zbr6h5nviyhcf3nolfdrrwupidas2e4pyt7im5m26fvexq5rdjxg",
+    "tokenIn": "keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo",
+    "tokenOut": "keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52",
+    "amountIn": "1000000",
+    "amountOut": "10874956",
+    "priceImpact": "1.0358618791013186"
+  },
+  {
+    "type": "SWAP_FORWARD",
+    "timestamp": 1763099933142,
+    "user": "keeta_aabqrcutk5ufa6ok4hu2ysa2qgiyjhnb23gexoy65l473qqoliyydd6ema25khi",
+    "pool": "keeta_arfsjmvr3zbr6h5nviyhcf3nolfdrrwupidas2e4pyt7im5m26fvexq5rdjxg",
+    "tokenIn": "keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52",
+    "tokenOut": "keeta_anchh4m5ukgvnx5jcwe56k3ltgo4x4kppicdjgcaftx4525gdvknf73fotmdo",
+    "amountIn": "50000000",
+    "amountOut": "4748297",
+    "priceImpact": "4.748304914744228"
+  },
+  {
+    "type": "SWAP_FORWARD",
     "timestamp": 1763060073890,
     "user": "keeta_aabtozgfunwwvwdztv54y6l5x57q2g3254shgp27zjltr2xz3pyo7q4tjtmsamy",
     "pool": "keeta_atxpnzr2b2hqtkv5n4mvtfts3kw27rf5jow4rae45xknveq4anb2zqxq2dsz2",
