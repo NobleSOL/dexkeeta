@@ -148,7 +148,7 @@ When Keeta adds smart contracts, we'll migrate to a fully on-chain model.
 - **Exchange Rate:** Current price (e.g., 1 KTA = 9,289 RIDE)
 - **Price Impact:** How much your swap affects the price
 - **Minimum Received:** Worst-case amount after slippage
-- **Fee:** 0.3% swap fee (goes to liquidity providers)
+- **Fee:** 0.3% total (0.25% to LPs, 0.05% to protocol)
 
 **3. Sign the Transaction**
 - Click "Swap"
@@ -156,17 +156,18 @@ When Keeta adds smart contracts, we'll migrate to a fully on-chain model.
 - You sign with your private key (never leaves your browser)
 
 **4. Atomic Execution**
-The backend constructs a single atomic transaction with 3 operations:
+The backend constructs two sequential transactions:
 
 ```javascript
-Transaction = [
-  1. You send 0.03 KTA to treasury (0.3% fee)
-  2. You send 10 KTA to the pool
+TX1: User Sends Tokens (with fee split)
+  1. You send 9.975 KTA to pool (99.75% - includes 0.25% LP fee)
+  2. You send 0.005 KTA to treasury (0.05% protocol fee)
+
+TX2: Pool Sends Output
   3. Pool sends 97,000 RIDE to you (via SEND_ON_BEHALF)
-]
 ```
 
-**All 3 operations succeed together, or all fail together** - no partial execution!
+**Each transaction is atomic** - all operations within succeed together or fail together!
 
 **5. Confirmation**
 - Transaction broadcasts to Keeta blockchain
@@ -208,7 +209,7 @@ Transaction = [
 - Anyone can add or remove liquidity from any pool
 - You receive LP tokens representing your share of the pool
 - LP tokens are fungible and tradeable (Uniswap V2-style)
-- Swap fees (0.3%) are distributed proportionally to LP token holders
+- Swap fees: 0.25% to LPs (stays in pool), 0.05% to protocol (treasury)
 
 **Ownership Model:**
 - Each pool is owned by its creator
@@ -314,10 +315,11 @@ Transaction Flow:
 
 **How LP Earnings Work:**
 
-- Every swap through the pool charges a 0.3% fee
-- Fees are automatically added to pool reserves
-- This increases the value of all LP tokens
-- When you remove liquidity, you get your share of accumulated fees
+- Every swap through the pool charges a 0.3% total fee
+- 0.25% goes to LPs (stays in pool reserves)
+- 0.05% goes to protocol (sent to treasury for operations)
+- LP fees automatically increase the value of all LP tokens
+- When you remove liquidity, you get your share of accumulated LP fees
 
 **Example:**
 ```
@@ -431,18 +433,18 @@ Silverback DEX is fully optimized for mobile browsers!
 
 ### Swap Fees
 
-**0.3% Swap Fee**
-- Standard AMM rate (same as Uniswap V2)
-- Goes to liquidity providers
-- Currently earned by DEX operator (since they provide all liquidity)
-- Automatically reinvested into pool reserves
+**0.3% Total Swap Fee (SushiSwap Model)**
+- Total fee: 0.3% (standard AMM rate, same as Uniswap V2)
+- LP fee: 0.25% (83% of total) → Stays in pool reserves for LP token holders
+- Protocol fee: 0.05% (17% of total) → Sent to treasury for operations
 
 **Example:**
 ```
 You swap: 10 KTA
-Swap fee: 0.03 KTA (0.3%)
-To pool: 9.97 KTA
-Treasury: 0.03 KTA
+Total fee: 0.3 KTA (0.3%)
+  ├─ LP fee: 0.25 KTA → Pool reserves (LPs earn this)
+  └─ Protocol fee: 0.05 KTA → Treasury (operations)
+To pool: 9.975 KTA (includes LP fee)
 ```
 
 ### Network Fees
@@ -457,11 +459,13 @@ Treasury: 0.03 KTA
 
 **When you swap 10 KTA for RIDE:**
 ```
-Input:        10 KTA
-Swap Fee:     -0.03 KTA   (0.3% - goes to LP)
-Network Fee:  ~0.001 KTA  (goes to Keeta treasury)
-To Pool:      9.97 KTA
-You Receive:  ~97,000 RIDE (based on exchange rate)
+Input:          10 KTA
+Swap Fee:       -0.3 KTA total (0.3%)
+  ├─ LP Fee:    -0.25 KTA (to pool reserves)
+  └─ Protocol:  -0.05 KTA (to treasury)
+Network Fee:    ~0.001 KTA  (goes to Keeta blockchain)
+To Pool:        9.975 KTA (includes LP fee)
+You Receive:    ~97,000 RIDE (based on AMM calculation)
 ```
 
 **No Hidden Fees:**
@@ -664,10 +668,11 @@ A: Each pool is owned by its creator:
 
 **Q: How do I earn fees as a liquidity provider?**
 A: Fees are earned automatically:
-- Every swap charges a 0.3% fee
-- Fees are added to pool reserves
-- This increases the value of all LP tokens
-- When you remove liquidity, you receive your proportional share of accumulated fees
+- Every swap charges a 0.3% total fee
+- 0.25% goes to LPs (stays in pool reserves)
+- 0.05% goes to protocol (sent to treasury)
+- LP fees increase the value of all LP tokens
+- When you remove liquidity, you receive your proportional share of accumulated LP fees
 
 **Q: What is impermanent loss?**
 A: Impermanent loss occurs when token prices change after you provide liquidity:
