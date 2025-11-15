@@ -126,17 +126,14 @@ export function ActivePoolCard({ pool, onManage }: { pool: PoolCardData; onManag
             </div>
           </div>
 
-          {/* Fee Earnings Estimate */}
+          {/* Earnings Estimate */}
           <div className="rounded-lg border border-green-500/40 bg-green-500/10 p-2 mb-3">
             <div className="flex items-center gap-1 mb-1">
               <Coins className="h-3 w-3 text-green-400" />
-              <span className="text-xs text-muted-foreground">Est. Fee Earnings</span>
+              <span className="text-xs text-muted-foreground">Est. Earnings</span>
             </div>
             <div className="text-xs font-semibold text-green-400">
               ~{userDailyFees.toFixed(6)} {pool.tokenA.symbol}/day
-            </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              LP tokens auto-compound fees from 0.3% of all trades
             </div>
           </div>
         </>
