@@ -1,23 +1,47 @@
 // src/routes/pools.js
 import express from 'express';
 import { getPoolManager } from '../contracts/PoolManager.js';
+import { APYCalculator } from '../utils/apy-calculator.js';
 
 const router = express.Router();
 
 /**
  * GET /api/pools
- * Get all pools
+ * Get all pools with APY data
  */
 router.get('/', async (req, res) => {
   try {
     const poolManager = await getPoolManager();
     const allPools = await poolManager.getAllPoolsInfo();
 
+    // Calculate APY for each pool
+    const apyCalculator = new APYCalculator();
+    const poolsWithAPY = await Promise.all(
+      allPools.map(async (pool) => {
+        // Calculate APY using current reserves
+        const apyData = await apyCalculator.calculatePoolAPY(
+          pool.poolAddress,
+          BigInt(pool.reserveA),
+          BigInt(pool.reserveB),
+          pool.decimalsA,
+          pool.decimalsB
+        );
+
+        // Add APY data to pool object
+        return {
+          ...pool,
+          apy: apyData.apy,
+          volume24h: apyData.volume24h,
+          tvl: apyData.tvl,
+        };
+      })
+    );
+
     // Return all pools (including empty ones so users can add liquidity)
     res.json({
       success: true,
-      pools: allPools,
-      count: allPools.length,
+      pools: poolsWithAPY,
+      count: poolsWithAPY.length,
     });
   } catch (error) {
     console.error('Get pools error:', error);

@@ -22,6 +22,9 @@ export interface PoolCardData {
   totalSupply: bigint;
   userLpBalance?: bigint;
   userPoolShare?: number;
+  apy?: number; // Real APY from backend (calculated from 24h reserve growth)
+  volume24h?: number; // 24h trading volume
+  tvl?: number; // Total value locked
 }
 
 export function ActivePoolCard({ pool, onManage }: { pool: PoolCardData; onManage: (pool: PoolCardData) => void }) {
@@ -31,12 +34,9 @@ export function ActivePoolCard({ pool, onManage }: { pool: PoolCardData; onManag
   // Calculate TVL (simple display without USD pricing)
   const tvl = `${reserveAFormatted.toFixed(2)} ${pool.tokenA.symbol} + ${reserveBFormatted.toFixed(2)} ${pool.tokenB.symbol}`;
 
-  // Estimate APY (simplified - assumes daily volume is ~10% of TVL)
-  // APY = (daily volume * fee rate * 365 days) / TVL * 100
-  const assumedDailyVolumePercent = 0.1; // Assume 10% of TVL trades daily
-  const estimatedAPY = reserveAFormatted > 0
-    ? ((assumedDailyVolumePercent * 0.003 * 365) * 100).toFixed(2)
-    : "0.00";
+  // Use real APY from backend (calculated from 24h reserve growth)
+  // Falls back to 0 if APY data is not available yet (no 24h snapshot)
+  const apy = pool.apy !== undefined ? pool.apy.toFixed(2) : "0.00";
 
   // User's position
   const hasPosition = pool.userLpBalance && pool.userLpBalance > 0n;
@@ -104,9 +104,9 @@ export function ActivePoolCard({ pool, onManage }: { pool: PoolCardData; onManag
         <div className="rounded-lg border border-border/40 bg-secondary/40 p-2">
           <div className="flex items-center gap-1 mb-1">
             <TrendingUp className="h-3 w-3 text-green-400" />
-            <span className="text-xs text-muted-foreground">Est. APY</span>
+            <span className="text-xs text-muted-foreground">APY</span>
           </div>
-          <div className="text-xs font-semibold text-green-400">{estimatedAPY}%</div>
+          <div className="text-xs font-semibold text-green-400">{apy}%</div>
         </div>
       </div>
 

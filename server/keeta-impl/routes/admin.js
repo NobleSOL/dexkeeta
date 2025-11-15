@@ -4,6 +4,7 @@ import { getOpsAccount, accountFromAddress, KeetaNet, createUserClient } from '.
 import { getPoolManager } from '../contracts/PoolManager.js';
 import { PoolRepository } from '../db/pool-repository.js';
 import { initializeDatabase } from '../db/client.js';
+import { SnapshotRecorder } from '../utils/snapshot-recorder.js';
 
 const router = express.Router();
 
@@ -570,6 +571,64 @@ router.post('/migrate-lp-tokens', async (req, res) => {
     });
   } catch (error) {
     console.error('\n❌ Migration failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/admin/record-snapshots
+ *
+ * Record reserve snapshots for all pools
+ * Used for APY calculation based on 24h reserve growth
+ * Can be triggered manually or via cron job every 6 hours
+ */
+router.post('/record-snapshots', async (req, res) => {
+  try {
+    console.log('📸 Recording snapshots for all pools...\n');
+
+    const recorder = new SnapshotRecorder();
+    const results = await recorder.recordAllSnapshots();
+
+    res.json({
+      success: true,
+      message: 'Snapshots recorded successfully',
+      ...results,
+    });
+  } catch (error) {
+    console.error('❌ Snapshot recording failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/admin/clean-snapshots
+ *
+ * Clean up old snapshots (default: keep last 30 days)
+ * Optional query param: ?days=X to specify retention period
+ */
+router.post('/clean-snapshots', async (req, res) => {
+  try {
+    const daysToKeep = parseInt(req.query.days) || 30;
+
+    console.log(`🧹 Cleaning snapshots older than ${daysToKeep} days...\n`);
+
+    const recorder = new SnapshotRecorder();
+    const deletedCount = await recorder.cleanOldSnapshots(daysToKeep);
+
+    res.json({
+      success: true,
+      message: `Cleaned ${deletedCount} old snapshots`,
+      deletedCount,
+      daysKept: daysToKeep,
+    });
+  } catch (error) {
+    console.error('❌ Snapshot cleanup failed:', error);
     res.status(500).json({
       success: false,
       error: error.message,

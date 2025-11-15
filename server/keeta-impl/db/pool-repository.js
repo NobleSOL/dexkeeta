@@ -138,4 +138,66 @@ export class PoolRepository {
     const result = await pool.query(query, [lpTokenAddress, poolAddress]);
     return result.rows[0];
   }
+
+  /**
+   * Save a pool snapshot for APY tracking
+   */
+  async saveSnapshot(poolAddress, reserveA, reserveB) {
+    const pool = getDbPool();
+    const query = `
+      INSERT INTO pool_snapshots (pool_address, reserve_a, reserve_b)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (pool_address, snapshot_time)
+      DO NOTHING
+      RETURNING *;
+    `;
+    const values = [poolAddress, reserveA.toString(), reserveB.toString()];
+    const result = await pool.query(query, values);
+    return result.rows[0];
+  }
+
+  /**
+   * Get latest snapshot for a pool (for 24h comparison)
+   */
+  async getSnapshotAt(poolAddress, hoursAgo) {
+    const pool = getDbPool();
+    const query = `
+      SELECT * FROM pool_snapshots
+      WHERE pool_address = $1
+        AND snapshot_time <= NOW() - INTERVAL '${hoursAgo} hours'
+      ORDER BY snapshot_time DESC
+      LIMIT 1;
+    `;
+    const result = await pool.query(query, [poolAddress]);
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Get all snapshots for a pool (for historical analysis)
+   */
+  async getPoolSnapshots(poolAddress, limit = 100) {
+    const pool = getDbPool();
+    const query = `
+      SELECT * FROM pool_snapshots
+      WHERE pool_address = $1
+      ORDER BY snapshot_time DESC
+      LIMIT $2;
+    `;
+    const result = await pool.query(query, [poolAddress, limit]);
+    return result.rows;
+  }
+
+  /**
+   * Clean up old snapshots (keep last 30 days)
+   */
+  async cleanOldSnapshots(daysToKeep = 30) {
+    const pool = getDbPool();
+    const query = `
+      DELETE FROM pool_snapshots
+      WHERE snapshot_time < NOW() - INTERVAL '${daysToKeep} days'
+      RETURNING COUNT(*);
+    `;
+    const result = await pool.query(query);
+    return result.rowCount;
+  }
 }
