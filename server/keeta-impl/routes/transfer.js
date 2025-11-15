@@ -62,9 +62,14 @@ router.post('/send', async (req, res) => {
 
     console.log('✅ Transfer successful:', result);
 
+    // Convert result to string to handle BigInt serialization
+    const resultString = typeof result === 'object' ? JSON.stringify(result, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value
+    ) : String(result);
+
     res.json({
       success: true,
-      txHash: result?.txHash || result,
+      txHash: result?.txHash || resultString,
       sender: senderAddress,
       recipient: recipientAddress,
       token: tokenAddress,
