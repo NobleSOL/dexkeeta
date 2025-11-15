@@ -645,7 +645,7 @@ router.post('/migrate-snapshots', async (req, res) => {
   try {
     console.log('🔧 Running pool_snapshots migration...\n');
 
-    const { getDbPool } = await import('../db/pool-repository.js');
+    const { getDbPool } = await import('../db/client.js');
     const pool = getDbPool();
 
     // Create pool_snapshots table
