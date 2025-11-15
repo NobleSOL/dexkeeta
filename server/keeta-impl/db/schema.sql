@@ -22,11 +22,22 @@ CREATE TABLE IF NOT EXISTS lp_positions (
   UNIQUE(pool_address, user_address)
 );
 
+-- Pool snapshots table - stores reserve snapshots for APY calculation
+CREATE TABLE IF NOT EXISTS pool_snapshots (
+  id SERIAL PRIMARY KEY,
+  pool_address VARCHAR(255) NOT NULL REFERENCES pools(pool_address) ON DELETE CASCADE,
+  reserve_a NUMERIC(78, 0) NOT NULL,
+  reserve_b NUMERIC(78, 0) NOT NULL,
+  snapshot_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(pool_address, snapshot_time)
+);
+
 -- Indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_pools_pair_key ON pools(pair_key);
 CREATE INDEX IF NOT EXISTS idx_pools_tokens ON pools(token_a, token_b);
 CREATE INDEX IF NOT EXISTS idx_lp_positions_user ON lp_positions(user_address);
 CREATE INDEX IF NOT EXISTS idx_lp_positions_pool ON lp_positions(pool_address);
+CREATE INDEX IF NOT EXISTS idx_pool_snapshots_pool_time ON pool_snapshots(pool_address, snapshot_time DESC);
 
 -- Trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
