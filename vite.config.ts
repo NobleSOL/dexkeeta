@@ -61,7 +61,8 @@ export default defineConfig(async ({ mode }) => {
     },
     esbuild: {
       // Configure esbuild for proper production builds
-      drop: mode === 'production' ? ['console', 'debugger'] : [],
+      // Temporarily enable console logs in production for debugging
+      drop: mode === 'production' ? ['debugger'] : [],
     },
     plugins,
     resolve: {
