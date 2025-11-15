@@ -636,4 +636,63 @@ router.post('/clean-snapshots', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/admin/migrate-snapshots
+ *
+ * Create pool_snapshots table (safe migration - uses CREATE TABLE IF NOT EXISTS)
+ */
+router.post('/migrate-snapshots', async (req, res) => {
+  try {
+    console.log('🔧 Running pool_snapshots migration...\n');
+
+    const { getDbPool } = await import('../db/pool-repository.js');
+    const pool = getDbPool();
+
+    // Create pool_snapshots table
+    const createTableQuery = `
+      CREATE TABLE IF NOT EXISTS pool_snapshots (
+        id SERIAL PRIMARY KEY,
+        pool_address VARCHAR(255) NOT NULL REFERENCES pools(pool_address) ON DELETE CASCADE,
+        reserve_a NUMERIC(78, 0) NOT NULL,
+        reserve_b NUMERIC(78, 0) NOT NULL,
+        snapshot_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(pool_address, snapshot_time)
+      );
+    `;
+
+    await pool.query(createTableQuery);
+    console.log('✅ pool_snapshots table created');
+
+    // Create index
+    const createIndexQuery = `
+      CREATE INDEX IF NOT EXISTS idx_pool_snapshots_pool_time
+      ON pool_snapshots(pool_address, snapshot_time DESC);
+    `;
+
+    await pool.query(createIndexQuery);
+    console.log('✅ Index created: idx_pool_snapshots_pool_time');
+
+    // Verify table exists
+    const verifyQuery = `
+      SELECT COUNT(*) as count FROM information_schema.tables
+      WHERE table_name = 'pool_snapshots';
+    `;
+
+    const result = await pool.query(verifyQuery);
+    const tableExists = result.rows[0].count === '1';
+
+    res.json({
+      success: true,
+      message: 'Migration completed successfully',
+      tableCreated: tableExists,
+    });
+  } catch (error) {
+    console.error('❌ Migration failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;
