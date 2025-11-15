@@ -19,9 +19,11 @@ import {
   Info,
   AlertTriangle,
   TrendingUp,
+  Send,
 } from "lucide-react";
 import { KeetaPoolCard, KeetaPoolCardData } from "@/components/keeta/KeetaPoolCard";
 import QuickFill from "@/components/shared/QuickFill";
+import { useKeetaTokenPrices } from "@/components/keeta/useKeetaPricing";
 import {
   generateWallet as generateWalletClient,
   getAddressFromSeed,
@@ -32,7 +34,10 @@ import {
   executeSwap as executeSwapClient,
   addLiquidity as addLiquidityClient,
   removeLiquidity as removeLiquidityClient,
-  createPool as createPoolClient
+  createPool as createPoolClient,
+  generateMnemonic,
+  mnemonicToSeed,
+  validateMnemonic
 } from "@/lib/keeta-client";
 
 // API base URL - uses environment variable if set, otherwise falls back to same origin
@@ -92,8 +97,11 @@ export default function KeetaDex() {
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [showAllTokens, setShowAllTokens] = useState(false);
   const [newSeedBackup, setNewSeedBackup] = useState<string | null>(null);
+  const [newMnemonicBackup, setNewMnemonicBackup] = useState<string | null>(null);
   const [seedBackupConfirmed, setSeedBackupConfirmed] = useState(false);
   const [copiedSeed, setCopiedSeed] = useState(false);
+  const [useMnemonic, setUseMnemonic] = useState(false);
+  const [importMethod, setImportMethod] = useState<'hex' | 'mnemonic'>('hex');
 
   // Swap state
   const [selectedPoolForSwap, setSelectedPoolForSwap] = useState<string>("");
@@ -120,6 +128,17 @@ export default function KeetaDex() {
 
   // Tab state for controlled navigation
   const [activeTab, setActiveTab] = useState("swap");
+
+  // Send tokens state
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [sendToken, setSendToken] = useState<{ address: string; symbol: string; balanceFormatted: string } | null>(null);
+  const [sendRecipient, setSendRecipient] = useState("");
+  const [sendAmount, setSendAmount] = useState("");
+  const [sending, setSending] = useState(false);
+
+  // Fetch token prices
+  const tokenAddresses = wallet?.tokens.map(t => t.address) || [];
+  const { data: tokenPrices } = useKeetaTokenPrices(tokenAddresses);
 
   // Toggle tokens function for liquidity/swap
   function toggleSwapTokens() {
@@ -298,8 +317,24 @@ export default function KeetaDex() {
     try {
       console.log('🔵 Generating wallet (client-side)...');
 
-      // Generate wallet client-side (no API call needed!)
-      const { seed, address } = generateWalletClient();
+      let seed: string;
+      let mnemonic: string | null = null;
+
+      if (useMnemonic) {
+        // Generate 24-word mnemonic
+        console.log('🔑 Generating 24-word mnemonic...');
+        mnemonic = generateMnemonic();
+        seed = mnemonicToSeed(mnemonic);
+        console.log('✅ Mnemonic generated and converted to seed');
+      } else {
+        // Generate hex seed directly
+        const walletData = generateWalletClient();
+        seed = walletData.seed;
+        console.log('✅ Hex seed generated');
+      }
+
+      // Derive address from seed
+      const address = getAddressFromSeed(seed, 0);
 
       console.log('✅ Wallet generated client-side');
       console.log('✅ Address:', address);
@@ -307,6 +342,7 @@ export default function KeetaDex() {
 
       // Show seed backup modal
       setNewSeedBackup(seed);
+      setNewMnemonicBackup(mnemonic);
       setSeedBackupConfirmed(false);
       console.log('✅ Showing seed backup modal');
     } catch (error: any) {
@@ -334,6 +370,7 @@ export default function KeetaDex() {
     // Now actually import the wallet
     importWalletWithSeed(newSeedBackup);
     setNewSeedBackup(null);
+    setNewMnemonicBackup(null);
     setSeedBackupConfirmed(false);
     setCopiedSeed(false);
   }
@@ -385,18 +422,55 @@ export default function KeetaDex() {
   }
 
   async function importWallet() {
-    if (!seedInput || seedInput.length !== 64) {
+    if (!seedInput) {
       toast({
-        title: "Invalid Seed",
-        description: "Seed must be 64 hex characters",
+        title: "Invalid Input",
+        description: "Please enter your seed phrase or hex seed",
         variant: "destructive",
       });
       return;
     }
 
-    // Use importWalletWithSeed helper with accountIndex 0 (default)
-    await importWalletWithSeed(seedInput, 0);
-    setSeedInput("");
+    try {
+      let seed: string;
+
+      if (importMethod === 'mnemonic') {
+        // Validate and convert mnemonic to seed
+        const trimmedMnemonic = seedInput.trim();
+        if (!validateMnemonic(trimmedMnemonic)) {
+          toast({
+            title: "Invalid Mnemonic",
+            description: "Please enter a valid 24-word mnemonic phrase",
+            variant: "destructive",
+          });
+          return;
+        }
+        seed = mnemonicToSeed(trimmedMnemonic);
+        console.log('✅ Mnemonic validated and converted to seed');
+      } else {
+        // Validate hex seed
+        const trimmedSeed = seedInput.trim();
+        if (trimmedSeed.length !== 64 || !/^[0-9a-fA-F]+$/.test(trimmedSeed)) {
+          toast({
+            title: "Invalid Hex Seed",
+            description: "Seed must be 64 hex characters",
+            variant: "destructive",
+          });
+          return;
+        }
+        seed = trimmedSeed;
+      }
+
+      // Use importWalletWithSeed helper with accountIndex 0 (default)
+      await importWalletWithSeed(seed, 0);
+      setSeedInput("");
+    } catch (error: any) {
+      toast({
+        title: "Import Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   }
 
   async function refreshBalances() {
@@ -820,6 +894,47 @@ export default function KeetaDex() {
     }
   }
 
+  async function executeSend() {
+    if (!wallet || !sendToken || !sendRecipient || !sendAmount) return;
+
+    setSending(true);
+    try {
+      const response = await fetch(`${API_BASE}/transfer/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          senderSeed: wallet.seed,
+          recipientAddress: sendRecipient,
+          tokenAddress: sendToken.address,
+          amount: sendAmount,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: "Transfer Successful!",
+          description: `Sent ${sendAmount} ${sendToken.symbol} to ${sendRecipient.slice(0, 12)}...`,
+        });
+
+        // Close dialog and refresh balances
+        setSendDialogOpen(false);
+        await refreshBalances();
+      } else {
+        throw new Error(result.error || "Transfer failed");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Transfer Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSending(false);
+    }
+  }
+
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
     setCopiedAddress(true);
@@ -852,23 +967,44 @@ export default function KeetaDex() {
               <CardContent className="space-y-6">
               <div className="rounded-xl border border-border/40 bg-secondary/40 p-6 backdrop-blur">
                 <h3 className="text-sm font-semibold mb-4">Generate New Wallet</h3>
-                <Button
-                  onClick={generateWallet}
-                  disabled={loading}
-                  className="w-full bg-brand hover:bg-brand/90"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Wallet className="mr-2 h-4 w-4" />
-                      Generate Wallet
-                    </>
-                  )}
-                </Button>
+                <div className="space-y-4">
+                  {/* Generation method toggle */}
+                  <div className="flex gap-2">
+                    <Button
+                      variant={!useMnemonic ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setUseMnemonic(false)}
+                      className="flex-1"
+                    >
+                      Hex Seed
+                    </Button>
+                    <Button
+                      variant={useMnemonic ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setUseMnemonic(true)}
+                      className="flex-1"
+                    >
+                      24-Word Mnemonic
+                    </Button>
+                  </div>
+                  <Button
+                    onClick={generateWallet}
+                    disabled={loading}
+                    className="w-full bg-brand hover:bg-brand/90"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="mr-2 h-4 w-4" />
+                        Generate Wallet
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
 
               <div className="text-center text-sm text-muted-foreground">or</div>
@@ -876,12 +1012,40 @@ export default function KeetaDex() {
               <div className="rounded-xl border border-border/40 bg-secondary/40 p-6 backdrop-blur">
                 <h3 className="text-sm font-semibold mb-4">Import Existing Wallet</h3>
                 <div className="space-y-4">
-                  <Input
-                    placeholder="Enter your 64-character hex seed"
-                    value={seedInput}
-                    onChange={(e) => setSeedInput(e.target.value)}
-                    className="font-mono text-sm"
-                  />
+                  {/* Import method toggle */}
+                  <div className="flex gap-2">
+                    <Button
+                      variant={importMethod === 'hex' ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setImportMethod('hex')}
+                      className="flex-1"
+                    >
+                      Hex Seed
+                    </Button>
+                    <Button
+                      variant={importMethod === 'mnemonic' ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setImportMethod('mnemonic')}
+                      className="flex-1"
+                    >
+                      24-Word Mnemonic
+                    </Button>
+                  </div>
+                  {importMethod === 'hex' ? (
+                    <Input
+                      placeholder="Enter your 64-character hex seed"
+                      value={seedInput}
+                      onChange={(e) => setSeedInput(e.target.value)}
+                      className="font-mono text-sm"
+                    />
+                  ) : (
+                    <textarea
+                      placeholder="Enter your 24-word mnemonic phrase (separated by spaces)"
+                      value={seedInput}
+                      onChange={(e) => setSeedInput(e.target.value)}
+                      className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    />
+                  )}
                   <Button
                     onClick={importWallet}
                     disabled={loading || !seedInput}
@@ -907,7 +1071,10 @@ export default function KeetaDex() {
       {/* Seed Backup Modal - also needed when no wallet exists */}
       <Dialog open={!!newSeedBackup} onOpenChange={(open) => {
         console.log('🟠 Dialog onOpenChange called (no wallet), open:', open);
-        if (!open) setNewSeedBackup(null);
+        if (!open) {
+          setNewSeedBackup(null);
+          setNewMnemonicBackup(null);
+        }
       }}>
         <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
@@ -928,13 +1095,14 @@ export default function KeetaDex() {
             <div className="rounded-lg border-2 border-yellow-500/50 bg-yellow-500/10 p-3 sm:p-4">
               <div className="flex items-center justify-between mb-2 gap-2">
                 <span className="text-xs sm:text-sm font-semibold text-yellow-600 dark:text-yellow-400">
-                  Your Seed Phrase:
+                  {newMnemonicBackup ? 'Your Recovery Phrase:' : 'Your Seed Phrase:'}
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    navigator.clipboard.writeText(newSeedBackup || "");
+                    const textToCopy = newMnemonicBackup || newSeedBackup || "";
+                    navigator.clipboard.writeText(textToCopy);
                     setCopiedSeed(true);
                     setTimeout(() => setCopiedSeed(false), 2000);
                   }}
@@ -953,9 +1121,25 @@ export default function KeetaDex() {
                   )}
                 </Button>
               </div>
-              <code className="block break-all text-[10px] sm:text-xs font-mono bg-black/20 p-2 sm:p-3 rounded leading-relaxed">
-                {newSeedBackup}
-              </code>
+              {newMnemonicBackup ? (
+                // Display 24-word mnemonic in a grid
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {newMnemonicBackup.split(' ').map((word, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 bg-black/20 p-2 rounded text-[10px] sm:text-xs"
+                    >
+                      <span className="text-muted-foreground font-mono">{index + 1}.</span>
+                      <span className="font-mono font-semibold">{word}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                // Display hex seed
+                <code className="block break-all text-[10px] sm:text-xs font-mono bg-black/20 p-2 sm:p-3 rounded leading-relaxed">
+                  {newSeedBackup}
+                </code>
+              )}
             </div>
 
             {/* Warning Checklist */}
@@ -997,6 +1181,7 @@ export default function KeetaDex() {
               variant="outline"
               onClick={() => {
                 setNewSeedBackup(null);
+                setNewMnemonicBackup(null);
                 setSeedBackupConfirmed(false);
                 setCopiedSeed(false);
               }}
@@ -1091,9 +1276,29 @@ export default function KeetaDex() {
                             </code>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold">{token.balanceFormatted}</div>
-                          <div className="text-xs text-muted-foreground">{token.symbol}</div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => {
+                              setSendToken(token);
+                              setSendRecipient("");
+                              setSendAmount("");
+                              setSendDialogOpen(true);
+                            }}
+                          >
+                            <Send className="h-3 w-3" />
+                          </Button>
+                          <div className="text-right">
+                            <div className="text-lg font-bold">{token.balanceFormatted}</div>
+                            <div className="text-xs text-muted-foreground">{token.symbol}</div>
+                            {tokenPrices?.[token.address]?.priceUsd && (
+                              <div className="text-xs text-muted-foreground">
+                                ${(parseFloat(token.balanceFormatted) * tokenPrices[token.address].priceUsd!).toFixed(2)} USD
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1263,6 +1468,11 @@ export default function KeetaDex() {
                       className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60"
                     />
                   </div>
+                  {swapTokenIn && swapAmount && tokenPrices?.[swapTokenIn]?.priceUsd && (
+                    <div className="text-xs text-muted-foreground text-right mt-1">
+                      ${(parseFloat(swapAmount) * tokenPrices[swapTokenIn].priceUsd!).toFixed(2)} USD
+                    </div>
+                  )}
                 </div>
 
                 {/* Swap Arrow - Vertical with toggle */}
@@ -1319,6 +1529,18 @@ export default function KeetaDex() {
                       className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none text-muted-foreground/80"
                     />
                   </div>
+                  {selectedPoolForSwap && swapQuote && (() => {
+                    const pool = pools.find((p) => p.poolAddress === selectedPoolForSwap);
+                    if (!pool) return null;
+                    const tokenOut = pool.tokenA === swapTokenIn ? pool.tokenB : pool.tokenA;
+                    const price = tokenPrices?.[tokenOut]?.priceUsd;
+                    if (!price) return null;
+                    return (
+                      <div className="text-xs text-muted-foreground text-right mt-1">
+                        ${(parseFloat(swapQuote.amountOutHuman) * price).toFixed(2)} USD
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Quote Details */}
@@ -1671,7 +1893,10 @@ export default function KeetaDex() {
       {/* Seed Backup Modal */}
       <Dialog open={!!newSeedBackup} onOpenChange={(open) => {
         console.log('🟠 Dialog onOpenChange called, open:', open);
-        if (!open) setNewSeedBackup(null);
+        if (!open) {
+          setNewSeedBackup(null);
+          setNewMnemonicBackup(null);
+        }
       }}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
@@ -1692,13 +1917,14 @@ export default function KeetaDex() {
             <div className="rounded-lg border-2 border-yellow-500/50 bg-yellow-500/10 p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">
-                  Your Seed Phrase:
+                  {newMnemonicBackup ? 'Your Recovery Phrase:' : 'Your Seed Phrase:'}
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    navigator.clipboard.writeText(newSeedBackup || "");
+                    const textToCopy = newMnemonicBackup || newSeedBackup || "";
+                    navigator.clipboard.writeText(textToCopy);
                     setCopiedSeed(true);
                     setTimeout(() => setCopiedSeed(false), 2000);
                   }}
@@ -1717,9 +1943,25 @@ export default function KeetaDex() {
                   )}
                 </Button>
               </div>
-              <code className="block break-all text-xs font-mono bg-black/20 p-3 rounded">
-                {newSeedBackup}
-              </code>
+              {newMnemonicBackup ? (
+                // Display 24-word mnemonic in a grid
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {newMnemonicBackup.split(' ').map((word, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 bg-black/20 p-2 rounded text-xs"
+                    >
+                      <span className="text-muted-foreground font-mono">{index + 1}.</span>
+                      <span className="font-mono font-semibold">{word}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                // Display hex seed
+                <code className="block break-all text-xs font-mono bg-black/20 p-3 rounded">
+                  {newSeedBackup}
+                </code>
+              )}
             </div>
 
             {/* Warning Checklist */}
@@ -1761,6 +2003,7 @@ export default function KeetaDex() {
               variant="outline"
               onClick={() => {
                 setNewSeedBackup(null);
+                setNewMnemonicBackup(null);
                 setSeedBackupConfirmed(false);
                 setCopiedSeed(false);
               }}
@@ -1773,6 +2016,72 @@ export default function KeetaDex() {
               className="bg-brand hover:bg-brand/90"
             >
               I've Saved My Seed - Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Tokens Dialog */}
+      <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send {sendToken?.symbol}</DialogTitle>
+            <DialogDescription>
+              Send tokens to another Keeta address
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Recipient Address</label>
+              <Input
+                placeholder="keeta_a..."
+                value={sendRecipient}
+                onChange={(e) => setSendRecipient(e.target.value)}
+                className="font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Amount
+                {sendToken && (
+                  <span className="text-muted-foreground font-normal ml-2">
+                    (Balance: {sendToken.balanceFormatted} {sendToken.symbol})
+                  </span>
+                )}
+              </label>
+              <Input
+                type="number"
+                placeholder="0.0"
+                value={sendAmount}
+                onChange={(e) => setSendAmount(e.target.value)}
+              />
+              {sendToken && tokenPrices?.[sendToken.address]?.priceUsd && sendAmount && (
+                <div className="text-xs text-muted-foreground">
+                  ≈ ${(parseFloat(sendAmount) * tokenPrices[sendToken.address].priceUsd!).toFixed(2)} USD
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSendDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={executeSend}
+              disabled={sending || !sendRecipient || !sendAmount}
+              className="bg-brand hover:bg-brand/90"
+            >
+              {sending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                "Send"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -9,6 +9,8 @@ import poolsRouter from './keeta-impl/routes/pools.js';
 import walletRouter from './keeta-impl/routes/wallet.js';
 import transactionsRouter from './keeta-impl/routes/transactions.js';
 import adminRouter from './keeta-impl/routes/admin.js';
+import pricingRouter from './keeta-impl/routes/pricing.js';
+import transferRouter from './keeta-impl/routes/transfer.js';
 
 const router = Router();
 
@@ -19,5 +21,7 @@ router.use('/api/pools', poolsRouter);
 router.use('/api/wallet', walletRouter);
 router.use('/api/transactions', transactionsRouter);
 router.use('/api/admin', adminRouter);
+router.use('/api/pricing', pricingRouter);
+router.use('/api/transfer', transferRouter);
 
 export default router;
