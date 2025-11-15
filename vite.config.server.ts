@@ -42,6 +42,9 @@ export default defineConfig({
       output: {
         format: "es",
         entryFileNames: "[name].mjs",
+        // Preserve module structure to avoid circular dependency issues
+        preserveModules: true,
+        preserveModulesRoot: 'server',
       },
     },
     minify: false, // Keep readable for debugging
