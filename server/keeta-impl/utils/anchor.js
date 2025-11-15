@@ -12,6 +12,17 @@
  */
 
 import * as Anchor from '@keetanetwork/anchor';
+import * as KeetaSDK from '@keetanetwork/keetanet-client';
+
+/**
+ * Convert Keeta address string to Account object
+ *
+ * @param {string} address - Keeta address (keeta_...)
+ * @returns {Account}
+ */
+export function accountFromAddress(address) {
+  return KeetaSDK.lib.Account.fromPublicKeyString(address);
+}
 
 /**
  * Initialize anchor connection to external chain

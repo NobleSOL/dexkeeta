@@ -201,3 +201,16 @@ export class PoolRepository {
     return result.rowCount;
   }
 }
+
+// Singleton instance
+let instance = null;
+
+/**
+ * Get singleton instance of PoolRepository
+ */
+export function getPoolRepository() {
+  if (!instance) {
+    instance = new PoolRepository();
+  }
+  return instance;
+}

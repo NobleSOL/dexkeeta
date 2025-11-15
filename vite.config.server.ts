@@ -38,6 +38,7 @@ export default defineConfig({
         "dotenv/config",
         "pg",
         "@keetanetwork/keetanet-client",
+        "@keetanetwork/anchor",
       ],
       output: {
         format: "es",
