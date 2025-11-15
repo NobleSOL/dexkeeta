@@ -465,6 +465,7 @@ router.get('/check-database', async (req, res) => {
         token_a: p.token_a,
         token_b: p.token_b,
         creator: p.creator,
+        lp_token_address: p.lp_token_address,
       })),
       lp_positions: lpResult.rows.map(lp => ({
         pool_address: lp.pool_address,
@@ -475,6 +476,100 @@ router.get('/check-database', async (req, res) => {
     });
   } catch (error) {
     console.error('Database check error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/admin/migrate-lp-tokens
+ *
+ * Populate lpTokenAddress field for all pools in database
+ * Reads LP token address from on-chain pool name field
+ */
+router.post('/migrate-lp-tokens', async (req, res) => {
+  try {
+    console.log('🔧 Migrating database pools to populate LP token addresses...\n');
+
+    // Helper function to find LP token for a pool
+    async function findLpTokenForPool(client, poolAddress) {
+      try {
+        const accountsInfo = await client.client.getAccountsInfo([poolAddress]);
+        const accountInfo = accountsInfo[poolAddress];
+
+        if (!accountInfo?.info?.name) {
+          console.warn(`  ⚠️ No account info for pool ${poolAddress.slice(-8)}`);
+          return null;
+        }
+
+        // LP token is stored in pool's name field: "SILVERBACK_POOL|<lpTokenAddress>"
+        const parts = accountInfo.info.name.split('|');
+        if (parts.length >= 2 && parts[0] === 'SILVERBACK_POOL') {
+          return parts[1];
+        }
+
+        console.warn(`  ⚠️ Pool name doesn't match expected format: ${accountInfo.info.name}`);
+        return null;
+      } catch (error) {
+        console.error(`  ❌ Error reading pool ${poolAddress.slice(-8)}:`, error.message);
+        return null;
+      }
+    }
+
+    // Create repository and client
+    const repository = new PoolRepository();
+    const client = KeetaNet.UserClient.fromNetwork('test', null);
+
+    // Load all pools from database
+    console.log('[1/2] Loading pools from database...');
+    const pools = await repository.loadPools();
+    console.log(`✅ Found ${pools.length} pools in database\n`);
+
+    // Process each pool
+    console.log('[2/2] Updating LP token addresses...\n');
+    let updated = 0;
+    let skipped = 0;
+
+    for (const pool of pools) {
+      const shortAddr = pool.pool_address.slice(-8);
+      console.log(`📍 Processing pool ${shortAddr}...`);
+
+      // Skip if already has LP token
+      if (pool.lp_token_address) {
+        console.log(`   ⏭️ Already has LP token: ${pool.lp_token_address.slice(-8)}\n`);
+        skipped++;
+        continue;
+      }
+
+      // Find LP token address from blockchain
+      const lpTokenAddress = await findLpTokenForPool(client, pool.pool_address);
+
+      if (lpTokenAddress) {
+        // Update database
+        await repository.updatePoolLPToken(pool.pool_address, lpTokenAddress);
+        console.log(`   ✅ Updated with LP token: ${lpTokenAddress.slice(-8)}\n`);
+        updated++;
+      } else {
+        console.log(`   ⚠️ No LP token found (legacy pool)\n`);
+        skipped++;
+      }
+    }
+
+    console.log('\n✅ Migration completed!');
+    console.log(`   Updated: ${updated} pools`);
+    console.log(`   Skipped: ${skipped} pools`);
+
+    res.json({
+      success: true,
+      message: 'LP token migration completed',
+      updated,
+      skipped,
+      total: pools.length,
+    });
+  } catch (error) {
+    console.error('\n❌ Migration failed:', error);
     res.status(500).json({
       success: false,
       error: error.message,
