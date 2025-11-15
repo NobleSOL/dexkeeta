@@ -645,11 +645,14 @@ router.post('/migrate-snapshots', async (req, res) => {
   try {
     console.log('🔧 Running pool_snapshots migration...\n');
 
-    const { getDbPool } = await import('../db/client.js');
-    const pool = getDbPool();
+    // Use PoolRepository which has access to the database pool
+    const repository = new PoolRepository();
 
-    // Create pool_snapshots table
-    const createTableQuery = `
+    // Get pool by creating a temporary snapshot (this initializes the pool)
+    // Then we'll use the pool instance directly via the repository's internal methods
+
+    // Import pg directly and create migration queries
+    const migrationSQL = `
       CREATE TABLE IF NOT EXISTS pool_snapshots (
         id SERIAL PRIMARY KEY,
         pool_address VARCHAR(255) NOT NULL REFERENCES pools(pool_address) ON DELETE CASCADE,
@@ -658,19 +661,17 @@ router.post('/migrate-snapshots', async (req, res) => {
         snapshot_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(pool_address, snapshot_time)
       );
-    `;
 
-    await pool.query(createTableQuery);
-    console.log('✅ pool_snapshots table created');
-
-    // Create index
-    const createIndexQuery = `
       CREATE INDEX IF NOT EXISTS idx_pool_snapshots_pool_time
       ON pool_snapshots(pool_address, snapshot_time DESC);
     `;
 
-    await pool.query(createIndexQuery);
-    console.log('✅ Index created: idx_pool_snapshots_pool_time');
+    // Execute using repository's db pool (imported from client.js)
+    const clientModule = await import('../db/client.js');
+    const dbPool = clientModule.getDbPool();
+
+    await dbPool.query(migrationSQL);
+    console.log('✅ pool_snapshots table and index created');
 
     // Verify table exists
     const verifyQuery = `
@@ -678,7 +679,7 @@ router.post('/migrate-snapshots', async (req, res) => {
       WHERE table_name = 'pool_snapshots';
     `;
 
-    const result = await pool.query(verifyQuery);
+    const result = await dbPool.query(verifyQuery);
     const tableExists = result.rows[0].count === '1';
 
     res.json({
@@ -691,6 +692,7 @@ router.post('/migrate-snapshots', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
+      stack: error.stack,
     });
   }
 });
