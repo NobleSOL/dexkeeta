@@ -1,27 +1,38 @@
 // src/utils/constants.js
 import 'dotenv/config';
 
-// Initialize CONFIG immediately to avoid temporal dead zone errors
-const CONFIG = {
-  // Network
-  NETWORK: process.env.NETWORK || 'test',
-  NODE_HTTP: process.env.NODE_HTTP || 'https://api.test.keeta.com',
+// Use lazy initialization to avoid temporal dead zone errors in complex module graphs
+let _config = null;
 
-  // Fees (basis points: 30 = 0.3%)
-  SWAP_FEE_BPS: Number(process.env.SWAP_FEE_BPS || 30),           // Total: 0.3%
-  LP_FEE_BPS: Number(process.env.LP_FEE_BPS || 25),               // LP: 0.25% (stays in pool)
-  PROTOCOL_FEE_BPS: Number(process.env.PROTOCOL_FEE_BPS || 5),    // Protocol: 0.05% (to treasury)
+function getConfig() {
+  if (!_config) {
+    _config = {
+      // Network
+      NETWORK: process.env.NETWORK || 'test',
+      NODE_HTTP: process.env.NODE_HTTP || 'https://api.test.keeta.com',
 
-  // Known tokens
-  BASE_TOKEN: process.env.BASE_TOKEN || 'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52',
+      // Fees (basis points: 30 = 0.3%)
+      SWAP_FEE_BPS: Number(process.env.SWAP_FEE_BPS || 30),           // Total: 0.3%
+      LP_FEE_BPS: Number(process.env.LP_FEE_BPS || 25),               // LP: 0.25% (stays in pool)
+      PROTOCOL_FEE_BPS: Number(process.env.PROTOCOL_FEE_BPS || 5),    // Protocol: 0.05% (to treasury)
 
-  // Server
-  PORT: Number(process.env.PORT || 8888),
-  CORS_ORIGINS: process.env.CORS_ALLOWED_ORIGINS?.split(',') || '*',
-};
+      // Known tokens
+      BASE_TOKEN: process.env.BASE_TOKEN || 'keeta_anyiff4v34alvumupagmdyosydeq24lc4def5mrpmmyhx3j6vj2uucckeqn52',
 
-// Export after initialization
-export { CONFIG };
+      // Server
+      PORT: Number(process.env.PORT || 8888),
+      CORS_ORIGINS: process.env.CORS_ALLOWED_ORIGINS?.split(',') || '*',
+    };
+  }
+  return _config;
+}
+
+// Export as CONFIG property getter for backward compatibility
+export const CONFIG = new Proxy({}, {
+  get(target, prop) {
+    return getConfig()[prop];
+  }
+});
 
 // Helper to convert basis points to fraction
 export function bpsToFraction(bps) {
