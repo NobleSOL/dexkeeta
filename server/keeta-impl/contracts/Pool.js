@@ -9,6 +9,10 @@ import {
   createLPStorageAccount,
   updateLPMetadata,
   readLPMetadata,
+  fetchTokenMetadata,
+  mintLPTokens,
+  burnLPTokens,
+  getLPTokenBalance,
 } from '../utils/client.js';
 import {
   calculateSwapOutput,
@@ -232,8 +236,6 @@ export class Pool {
       );
     }
 
-    const { getOpsClient } = await import('../utils/client.js');
-    const { CONFIG } = await import('../utils/constants.js');
     const treasury = getTreasuryAccount();
 
     const tokenInAccount = accountFromAddress(tokenIn);
@@ -446,7 +448,6 @@ export class Pool {
   async getTokenSymbol(tokenAddress) {
     // Fetch from on-chain metadata
     try {
-      const { fetchTokenMetadata } = await import('../utils/client.js');
       const metadata = await fetchTokenMetadata(tokenAddress);
 
       // Return symbol from metadata (fetchTokenMetadata already has fallback logic)
@@ -540,7 +541,6 @@ export class Pool {
     // MINT LP TOKENS TO USER (Fungible token approach - like Uniswap)
     if (this.lpTokenAddress) {
       console.log(`🪙 Minting ${shares} LP tokens to ${userAddress.slice(0, 20)}...`);
-      const { mintLPTokens } = await import('../utils/client.js');
       await mintLPTokens(this.lpTokenAddress, userAddress, shares);
       console.log(`✅ LP tokens minted successfully`);
     } else {
@@ -613,7 +613,6 @@ export class Pool {
     // If LP token address is not set, try to discover it on-chain by scanning user's wallet
     if (!this.lpTokenAddress) {
       console.log(`🔍 LP token address not set, discovering on-chain from user wallet...`);
-      const { getOpsClient, accountFromAddress } = await import('../utils/client.js');
       const client = await getOpsClient();
       const userAccount = accountFromAddress(userAddress);
 
@@ -658,11 +657,9 @@ export class Pool {
 
     if (this.lpTokenAddress) {
       // NEW: Get balance from LP token (fungible token)
-      const { getLPTokenBalance, getBalances } = await import('../utils/client.js');
       userShares = await getLPTokenBalance(this.lpTokenAddress, userAddress);
 
       // Get total supply from LP token account info
-      const { getOpsClient, accountFromAddress } = await import('../utils/client.js');
       const client = await getOpsClient();
       const lpTokenAccount = accountFromAddress(this.lpTokenAddress);
 
@@ -766,7 +763,6 @@ export class Pool {
     // BURN LP TOKENS FROM USER (Fungible token approach - like Uniswap)
     if (this.lpTokenAddress) {
       console.log(`🔥 Burning ${liquidity} LP tokens from ${userAddress.slice(0, 20)}...`);
-      const { burnLPTokens } = await import('../utils/client.js');
       await burnLPTokens(this.lpTokenAddress, userClient, userAddress, liquidity);
       console.log(`✅ LP tokens burned successfully`);
     } else {
