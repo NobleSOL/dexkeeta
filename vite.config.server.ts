@@ -30,9 +30,14 @@ export default defineConfig({
         "buffer",
         "querystring",
         "child_process",
+        "fs/promises",
         // External dependencies that should not be bundled
         "express",
         "cors",
+        "dotenv",
+        "dotenv/config",
+        "pg",
+        "@keetanetwork/keetanet-client",
       ],
       output: {
         format: "es",
