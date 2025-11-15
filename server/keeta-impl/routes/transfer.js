@@ -54,7 +54,7 @@ router.post('/send', async (req, res) => {
 
     // Execute transfer
     console.log('🚀 Executing transfer...');
-    const result = await client.transfer(
+    const result = await client.send(
       recipientAccount,
       tokenAccount,
       amountAtomic

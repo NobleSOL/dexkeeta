@@ -90,10 +90,13 @@ export function getAddressFromSeed(seed: string, accountIndex: number = 0): stri
  * Convert 24-word mnemonic to hex seed
  */
 export function mnemonicToSeed(mnemonic: string): string {
-  if (!bip39.validateMnemonic(mnemonic)) {
+  // Normalize whitespace: trim and replace multiple spaces with single space
+  const normalizedMnemonic = mnemonic.trim().replace(/\s+/g, ' ');
+
+  if (!bip39.validateMnemonic(normalizedMnemonic)) {
     throw new Error('Invalid mnemonic phrase');
   }
-  const seedBuffer = bip39.mnemonicToSeedSync(mnemonic);
+  const seedBuffer = bip39.mnemonicToSeedSync(normalizedMnemonic);
   // Use the first 32 bytes for Keeta seed
   return Buffer.from(seedBuffer).slice(0, 32).toString('hex');
 }

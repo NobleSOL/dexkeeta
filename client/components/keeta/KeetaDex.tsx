@@ -436,8 +436,9 @@ export default function KeetaDex() {
 
       if (importMethod === 'mnemonic') {
         // Validate and convert mnemonic to seed
-        const trimmedMnemonic = seedInput.trim();
-        if (!validateMnemonic(trimmedMnemonic)) {
+        // Normalize whitespace: trim and replace multiple spaces with single space
+        const normalizedMnemonic = seedInput.trim().replace(/\s+/g, ' ');
+        if (!validateMnemonic(normalizedMnemonic)) {
           toast({
             title: "Invalid Mnemonic",
             description: "Please enter a valid 24-word mnemonic phrase",
@@ -445,7 +446,7 @@ export default function KeetaDex() {
           });
           return;
         }
-        seed = mnemonicToSeed(trimmedMnemonic);
+        seed = mnemonicToSeed(normalizedMnemonic);
         console.log('✅ Mnemonic validated and converted to seed');
       } else {
         // Validate hex seed
