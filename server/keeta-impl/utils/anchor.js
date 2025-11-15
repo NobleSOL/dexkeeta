@@ -11,7 +11,7 @@
  * - Multi-chain liquidity routing
  */
 
-import * as Anchor from '@keetanetwork/anchor';
+// import * as Anchor from '@keetanetwork/anchor'; // Commented out - not implemented yet
 import * as KeetaSDK from '@keetanetwork/keetanet-client';
 
 /**
