@@ -2,8 +2,7 @@
 // Completes swaps after user has sent tokens via TX1 (signed in Keythings)
 import express from 'express';
 import { getPoolManager } from '../contracts/PoolManager.js';
-import { getOpsClient } from '../utils/client.js';
-import { accountFromAddress } from '../utils/constants.js';
+import { getOpsClient, accountFromAddress } from '../utils/client.js';
 
 const router = express.Router();
 
