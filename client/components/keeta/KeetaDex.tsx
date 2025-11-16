@@ -505,13 +505,25 @@ export default function KeetaDex() {
 
         const balances = await getNormalizedBalances(wallet.address);
 
-        tokens = balances.map((bal: any) => ({
-          address: bal.token,
-          symbol: bal.token === 'KTA' ? 'KTA' : bal.token.slice(0, 8),
-          balance: bal.balance,
-          balanceFormatted: (parseFloat(bal.balance) / 1e9).toFixed(4),
-          decimals: 9,
-        }));
+        // Fetch metadata (symbol, decimals) for each token
+        const { fetchTokenMetadata } = await import('@/lib/keeta-client');
+
+        tokens = await Promise.all(
+          balances.map(async (bal: any) => {
+            const metadata = await fetchTokenMetadata(bal.token);
+            const balanceValue = BigInt(bal.balance);
+            const decimals = metadata.decimals || 9;
+            const balanceFormatted = (Number(balanceValue) / Math.pow(10, decimals)).toFixed(decimals);
+
+            return {
+              address: bal.token,
+              symbol: metadata.symbol,
+              balance: bal.balance,
+              balanceFormatted,
+              decimals,
+            };
+          })
+        );
       } else {
         // Use seed-based balance fetching for regular wallets
         tokens = await fetchBalances(wallet.seed, wallet.accountIndex || 0);
