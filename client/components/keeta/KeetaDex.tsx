@@ -495,7 +495,14 @@ export default function KeetaDex() {
       if (wallet.isKeythings) {
         // Use Keythings API for balance fetching
         console.log('📊 Fetching balances from Keythings...');
-        const { getNormalizedBalances } = await import('@/lib/keythings-provider');
+        const { getNormalizedBalances, isConnected } = await import('@/lib/keythings-provider');
+
+        // Check if Keythings is still connected
+        if (!isConnected()) {
+          console.warn('⚠️ Keythings wallet is not connected, skipping balance refresh');
+          return;
+        }
+
         const balances = await getNormalizedBalances(wallet.address);
 
         tokens = balances.map((bal: any) => ({
@@ -518,8 +525,17 @@ export default function KeetaDex() {
       setWallet(updatedWallet);
       localStorage.setItem("keetaWallet", JSON.stringify(updatedWallet));
       console.log('✅ Balances refreshed');
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Failed to refresh balances:', error);
+
+      // If Keythings connection is lost, notify user
+      if (wallet?.isKeythings && error.message?.includes('not connected')) {
+        toast({
+          title: "Wallet Connection Lost",
+          description: "Please reconnect your Keythings wallet",
+          variant: "destructive",
+        });
+      }
     }
   }
 
