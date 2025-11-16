@@ -4,6 +4,7 @@ import { Router } from 'express';
 
 // Import route modules from keeta-impl
 import swapRouter from './keeta-impl/routes/swap.js';
+import swapKeythingsRouter from './keeta-impl/routes/swap-keythings.js';
 import liquidityRouter from './keeta-impl/routes/liquidity.js';
 import poolsRouter from './keeta-impl/routes/pools.js';
 import walletRouter from './keeta-impl/routes/wallet.js';
@@ -16,6 +17,7 @@ const router = Router();
 
 // Mount Keeta routes under /api prefix
 router.use('/api/swap', swapRouter);
+router.use('/api/swap/keythings', swapKeythingsRouter);
 router.use('/api/liquidity', liquidityRouter);
 router.use('/api/pools', poolsRouter);
 router.use('/api/wallet', walletRouter);

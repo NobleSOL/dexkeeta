@@ -754,37 +754,117 @@ export default function KeetaDex() {
       const tokenInSymbol = pool.tokenA === swapTokenIn ? pool.symbolA : pool.symbolB;
       const tokenOutSymbol = pool.tokenA === swapTokenIn ? pool.symbolB : pool.symbolA;
 
-      console.log('🔄 Executing swap via backend API (requires ops SEND_ON_BEHALF permission)...');
+      // Keythings wallet: Two-transaction flow
+      if (wallet.isKeythings) {
+        console.log('🔄 Executing Keythings swap (two-transaction flow)...');
 
-      // Execute swap via backend API (ops account has SEND_ON_BEHALF permission on pool)
-      const swapResponse = await fetch(`${API_BASE}/swap/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userAddress: wallet.address,
-          userSeed: wallet.seed,
-          tokenIn: swapTokenIn,
-          tokenOut: tokenOut,
-          amountIn: swapAmount,
-          minAmountOut: swapQuote.minimumReceived,
-          slippagePercent: 0.5,
-        }),
-      });
+        // Import swap calculation utilities
+        const { calculateSwapOutput, calculateFeeSplit, toAtomic } = await import('@/lib/keeta-swap-math');
+        const { getKeythingsProvider } = await import('@/lib/keythings-provider');
 
-      const result = await swapResponse.json();
+        // Get pool reserves
+        const reserveIn = pool.tokenA === swapTokenIn ? BigInt(pool.reserveA) : BigInt(pool.reserveB);
+        const reserveOut = pool.tokenA === swapTokenIn ? BigInt(pool.reserveB) : BigInt(pool.reserveA);
 
-      console.log('🔍 Swap API result received:', JSON.stringify(result, null, 2));
+        // Convert input amount to atomic units (assuming 9 decimals)
+        const amountInAtomic = toAtomic(swapAmount, 9);
 
-      if (result.success) {
-        // Build explorer link using block hash from result.result.blockHash
-        const blockHash = result.result?.blockHash || result.blockHash;
-        console.log('🔍 Block hash extracted:', blockHash);
+        // Calculate swap output and fees
+        const { amountOut, feeAmount, priceImpact } = calculateSwapOutput(
+          amountInAtomic,
+          reserveIn,
+          reserveOut
+        );
 
+        console.log('💰 Swap calculation:', {
+          amountIn: amountInAtomic.toString(),
+          amountOut: amountOut.toString(),
+          feeAmount: feeAmount.toString(),
+          priceImpact: priceImpact.toFixed(2) + '%',
+        });
+
+        // Calculate fee split (0.05% to protocol, 99.95% to pool)
+        const { protocolFee, amountToPool } = calculateFeeSplit(amountInAtomic);
+
+        console.log('💸 Fee split:', {
+          protocolFee: protocolFee.toString(),
+          amountToPool: amountToPool.toString(),
+        });
+
+        // Get Keythings user client for transaction signing
+        const provider = getKeythingsProvider();
+        if (!provider) {
+          throw new Error('Keythings provider not found');
+        }
+
+        console.log('🔐 Requesting user client from Keythings...');
+        const userClient = await provider.getUserClient();
+
+        // Treasury address (hardcoded to match backend)
+        const TREASURY_ADDRESS = 'keeta_aabtozgfunwwvwdztv54y6l5x57q2g3254shgp27zjltr2xz3pyo7q4tjtmsamy';
+
+        // Build TX1: User sends tokenIn to pool + treasury
+        console.log('📝 Building TX1 (user sends tokens to pool + treasury)...');
+        const tx1Builder = userClient.initBuilder();
+
+        // Send 99.95% to pool
+        tx1Builder.send(pool.poolAddress, amountToPool, swapTokenIn);
+
+        // Send 0.05% protocol fee to treasury
+        if (protocolFee > 0n) {
+          tx1Builder.send(TREASURY_ADDRESS, protocolFee, swapTokenIn);
+        }
+
+        // Publish TX1 (will prompt user via Keythings UI)
+        console.log('✍️ Prompting user to sign TX1 via Keythings...');
+        await userClient.publishBuilder(tx1Builder);
+
+        // Extract TX1 block hash for logging
+        let tx1Hash = null;
+        if (tx1Builder.blocks && tx1Builder.blocks.length > 0) {
+          const block = tx1Builder.blocks[0];
+          if (block && block.hash) {
+            if (typeof block.hash === 'string') {
+              tx1Hash = block.hash.toUpperCase();
+            } else if (block.hash.toString) {
+              const hashStr = block.hash.toString();
+              if (hashStr.match(/^[0-9A-Fa-f]+$/)) {
+                tx1Hash = hashStr.toUpperCase();
+              } else if (block.hash.toString('hex')) {
+                tx1Hash = block.hash.toString('hex').toUpperCase();
+              }
+            }
+          }
+        }
+
+        console.log(`✅ TX1 completed: ${tx1Hash || 'no hash'}`);
+
+        // Call backend to execute TX2 (pool sends tokenOut to user)
+        console.log('📝 Calling backend to execute TX2 (pool → user)...');
+        const tx2Response = await fetch(`${API_BASE}/swap/keythings/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userAddress: wallet.address,
+            poolAddress: pool.poolAddress,
+            tokenOut: tokenOut,
+            amountOut: amountOut.toString(),
+          }),
+        });
+
+        const tx2Result = await tx2Response.json();
+
+        if (!tx2Result.success) {
+          throw new Error(tx2Result.error || 'TX2 failed');
+        }
+
+        console.log(`✅ TX2 completed: ${tx2Result.result?.blockHash || 'no hash'}`);
+
+        // Build explorer link (use TX2 hash if available, otherwise TX1)
+        const blockHash = tx2Result.result?.blockHash || tx1Hash;
         const explorerUrl = blockHash
           ? `https://explorer.test.keeta.com/block/${blockHash}`
           : `https://explorer.test.keeta.com/account/${wallet.address}`;
-
-        console.log('🔍 Explorer URL built:', explorerUrl);
 
         toast({
           title: "Swap Successful!",
@@ -818,8 +898,76 @@ export default function KeetaDex() {
 
         // Refresh pools to update reserves
         await loadPools();
+
       } else {
-        throw new Error(result.error || "Swap failed");
+        // Seed wallet: Traditional single-endpoint flow
+        console.log('🔄 Executing swap via backend API (requires ops SEND_ON_BEHALF permission)...');
+
+        // Execute swap via backend API (ops account has SEND_ON_BEHALF permission on pool)
+        const swapResponse = await fetch(`${API_BASE}/swap/execute`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userAddress: wallet.address,
+            userSeed: wallet.seed,
+            tokenIn: swapTokenIn,
+            tokenOut: tokenOut,
+            amountIn: swapAmount,
+            minAmountOut: swapQuote.minimumReceived,
+            slippagePercent: 0.5,
+          }),
+        });
+
+        const result = await swapResponse.json();
+
+        console.log('🔍 Swap API result received:', JSON.stringify(result, null, 2));
+
+        if (result.success) {
+          // Build explorer link using block hash from result.result.blockHash
+          const blockHash = result.result?.blockHash || result.blockHash;
+          console.log('🔍 Block hash extracted:', blockHash);
+
+          const explorerUrl = blockHash
+            ? `https://explorer.test.keeta.com/block/${blockHash}`
+            : `https://explorer.test.keeta.com/account/${wallet.address}`;
+
+          console.log('🔍 Explorer URL built:', explorerUrl);
+
+          toast({
+            title: "Swap Successful!",
+            description: (
+              <div className="space-y-1">
+                <div>Swapped {swapAmount} {tokenInSymbol} for {swapQuote.amountOutHuman} {tokenOutSymbol}</div>
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sky-400 hover:text-sky-300 underline text-sm flex items-center gap-1"
+                >
+                  View on Keeta Explorer
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
+            ),
+          });
+
+          // Clear form
+          setSwapAmount("");
+          setSwapQuote(null);
+
+          // Wait for blockchain to sync before refreshing
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // Refresh wallet balances
+          await refreshBalances();
+
+          // Refresh pools to update reserves
+          await loadPools();
+        } else {
+          throw new Error(result.error || "Swap failed");
+        }
       }
     } catch (error: any) {
       toast({
