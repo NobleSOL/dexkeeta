@@ -524,7 +524,7 @@ export default function KeetaDex() {
       const accounts = await connectKeythings();
 
       if (!accounts || accounts.length === 0) {
-        throw new Error("No accounts returned from Keythings");
+        throw new Error("Please unlock your Keythings wallet and ensure you have an account created. Then try connecting again.");
       }
 
       const address = accounts[0];
@@ -534,13 +534,24 @@ export default function KeetaDex() {
       setPositions([]);
       setPools([]);
 
-      // Fetch balances - use placeholder seed for Keythings (we won't use it for signing)
-      // For now, we'll use the client-side balance fetching with a dummy seed
-      // In a future update, we'll integrate Keythings' own balance methods
+      // Fetch balances using Keythings' native API
       console.log('📊 Fetching balances via Keythings...');
 
-      // For Keythings wallet, we'll use a placeholder seed since we don't have access to it
-      // The actual signing will be done through Keythings provider later
+      const { getNormalizedBalances } = await import('@/lib/keythings-provider');
+      const balances = await getNormalizedBalances(address);
+
+      console.log('✅ Keythings balances:', balances);
+
+      // Transform Keythings balances to our token format
+      const tokens = balances.map((bal: any) => ({
+        address: bal.token,
+        symbol: bal.token === 'KTA' ? 'KTA' : bal.token.slice(0, 8), // Use first 8 chars as symbol for custom tokens
+        balance: bal.balance,
+        balanceFormatted: (parseFloat(bal.balance) / 1e9).toFixed(4), // Assuming 9 decimals
+        decimals: 9,
+      }));
+
+      // For Keythings wallet, we use a placeholder seed since signing is done via extension
       const placeholderSeed = "0".repeat(64);
 
       // Create wallet object
@@ -548,7 +559,7 @@ export default function KeetaDex() {
         address,
         seed: placeholderSeed, // Not used for Keythings - signing is done via extension
         isKeythings: true,
-        tokens: [], // Will be populated by refreshBalances
+        tokens,
       };
 
       setWallet(walletData);
