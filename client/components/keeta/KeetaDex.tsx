@@ -36,6 +36,14 @@ import {
   removeLiquidity as removeLiquidityClient,
   createPool as createPoolClient,
 } from "@/lib/keeta-client";
+import {
+  isKeythingsInstalled,
+  connectKeythings,
+  getSelectedAddress,
+  isConnected,
+  onAccountsChanged,
+  onDisconnect,
+} from "@/lib/keythings-provider";
 
 // API base URL - uses environment variable if set, otherwise falls back to same origin
 // For production: set VITE_KEETA_API_BASE to your Railway backend URL (e.g., https://dexkeeta-production.up.railway.app/api)
@@ -46,6 +54,7 @@ type KeetaWallet = {
   address: string;
   seed: string;
   accountIndex?: number; // Account derivation index (default 0)
+  isKeythings?: boolean; // True if connected via Keythings wallet
   tokens: {
     address: string;
     symbol: string;
@@ -96,6 +105,10 @@ export default function KeetaDex() {
   const [newSeedBackup, setNewSeedBackup] = useState<string | null>(null);
   const [seedBackupConfirmed, setSeedBackupConfirmed] = useState(false);
   const [copiedSeed, setCopiedSeed] = useState(false);
+
+  // Keythings wallet state
+  const [keythingsConnected, setKeythingsConnected] = useState(false);
+  const [keythingsAddress, setKeythingsAddress] = useState<string | null>(null);
 
   // Swap state
   const [selectedPoolForSwap, setSelectedPoolForSwap] = useState<string>("");
@@ -168,7 +181,29 @@ export default function KeetaDex() {
     const savedWallet = localStorage.getItem("keetaWallet");
     if (savedWallet) {
       try {
-        setWallet(JSON.parse(savedWallet));
+        const walletData = JSON.parse(savedWallet);
+        setWallet(walletData);
+
+        // If it was a Keythings wallet, update the state
+        if (walletData.isKeythings) {
+          setKeythingsConnected(true);
+          setKeythingsAddress(walletData.address);
+
+          // Set up event listeners for Keythings
+          onAccountsChanged((accounts) => {
+            console.log('👤 Keythings account changed:', accounts);
+            if (accounts.length === 0) {
+              disconnectWallet();
+            } else {
+              connectKeythingsWallet();
+            }
+          });
+
+          onDisconnect(() => {
+            console.log('🔌 Keythings disconnected');
+            disconnectWallet();
+          });
+        }
       } catch (e) {
         console.error("Failed to load wallet:", e);
       }
@@ -457,8 +492,107 @@ export default function KeetaDex() {
     }
   }
 
+  async function connectKeythingsWallet() {
+    setLoading(true);
+    try {
+      // Check if Keythings is installed
+      if (!isKeythingsInstalled()) {
+        toast({
+          title: "Keythings Not Found",
+          description: "Please install the Keythings browser extension to continue",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('🔌 Connecting to Keythings wallet...');
+
+      // Request connection
+      const accounts = await connectKeythings();
+
+      if (!accounts || accounts.length === 0) {
+        throw new Error("No accounts returned from Keythings");
+      }
+
+      const address = accounts[0];
+      console.log('✅ Connected to Keythings:', address);
+
+      // Clear old positions/pools data
+      setPositions([]);
+      setPools([]);
+
+      // Fetch balances - use placeholder seed for Keythings (we won't use it for signing)
+      // For now, we'll use the client-side balance fetching with a dummy seed
+      // In a future update, we'll integrate Keythings' own balance methods
+      console.log('📊 Fetching balances via Keythings...');
+
+      // For Keythings wallet, we'll use a placeholder seed since we don't have access to it
+      // The actual signing will be done through Keythings provider later
+      const placeholderSeed = "0".repeat(64);
+
+      // Create wallet object
+      const walletData: KeetaWallet = {
+        address,
+        seed: placeholderSeed, // Not used for Keythings - signing is done via extension
+        isKeythings: true,
+        tokens: [], // Will be populated by refreshBalances
+      };
+
+      setWallet(walletData);
+      setKeythingsConnected(true);
+      setKeythingsAddress(address);
+
+      // Set up event listeners
+      onAccountsChanged((accounts) => {
+        console.log('👤 Keythings account changed:', accounts);
+        if (accounts.length === 0) {
+          // Disconnected
+          disconnectWallet();
+        } else {
+          // Account switched - reconnect with new account
+          connectKeythingsWallet();
+        }
+      });
+
+      onDisconnect(() => {
+        console.log('🔌 Keythings disconnected');
+        disconnectWallet();
+      });
+
+      toast({
+        title: "Keythings Connected!",
+        description: `Connected to ${address.substring(0, 20)}...`,
+      });
+
+      // Note: We'll save to localStorage but mark it as Keythings
+      localStorage.setItem("keetaWallet", JSON.stringify(walletData));
+
+      // Fetch data (balances will be empty initially - need to implement Keythings balance fetching)
+      console.log('📊 Loading pools and positions...');
+
+      // Load pools
+      await loadPools();
+
+      // For positions, we'll need the actual implementation
+      // For now, just log that we're connected
+      console.log('✅ Keythings wallet connected successfully');
+
+    } catch (error: any) {
+      console.error('❌ Keythings connection error:', error);
+      toast({
+        title: "Connection Failed",
+        description: error.message || "Failed to connect to Keythings wallet",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function disconnectWallet() {
     setWallet(null);
+    setKeythingsConnected(false);
+    setKeythingsAddress(null);
     localStorage.removeItem("keetaWallet");
     setPools([]);
     setPositions([]);
@@ -929,6 +1063,35 @@ export default function KeetaDex() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+              {isKeythingsInstalled() && (
+                <>
+                  <div className="rounded-xl border border-border/40 bg-secondary/40 p-6 backdrop-blur">
+                    <h3 className="text-sm font-semibold mb-4">Connect Keythings Wallet</h3>
+                    <div className="space-y-4">
+                      <Button
+                        onClick={connectKeythingsWallet}
+                        disabled={loading}
+                        className="w-full bg-brand hover:bg-brand/90"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          <>
+                            <Wallet className="mr-2 h-4 w-4" />
+                            Connect Keythings Wallet
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="text-center text-sm text-muted-foreground">or</div>
+                </>
+              )}
+
               <div className="rounded-xl border border-border/40 bg-secondary/40 p-6 backdrop-blur">
                 <h3 className="text-sm font-semibold mb-4">Generate New Wallet</h3>
                 <div className="space-y-4">
@@ -1133,6 +1296,12 @@ export default function KeetaDex() {
                           )}
                         </Button>
                       </div>
+                      {wallet.isKeythings && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+                          <span className="text-xs text-green-400 font-medium">Connected via Keythings</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <Button variant="outline" size="sm" onClick={disconnectWallet} className="flex-shrink-0 self-start sm:self-center">
