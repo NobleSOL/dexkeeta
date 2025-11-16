@@ -490,7 +490,26 @@ export default function KeetaDex() {
 
     try {
       console.log('🔄 Refreshing balances...');
-      const tokens = await fetchBalances(wallet.seed, wallet.accountIndex || 0);
+
+      let tokens;
+
+      if (wallet.isKeythings) {
+        // Use Keythings API for balance fetching
+        console.log('📊 Fetching balances from Keythings...');
+        const { getNormalizedBalances } = await import('@/lib/keythings-provider');
+        const balances = await getNormalizedBalances(wallet.address);
+
+        tokens = balances.map((bal: any) => ({
+          address: bal.token,
+          symbol: bal.token === 'KTA' ? 'KTA' : bal.token.slice(0, 8),
+          balance: bal.balance,
+          balanceFormatted: (parseFloat(bal.balance) / 1e9).toFixed(4),
+          decimals: 9,
+        }));
+      } else {
+        // Use seed-based balance fetching for regular wallets
+        tokens = await fetchBalances(wallet.seed, wallet.accountIndex || 0);
+      }
 
       const updatedWallet = {
         ...wallet,
