@@ -81,6 +81,11 @@ export default function ConnectButton() {
       if (accounts.length > 0) {
         setKeythingsAddress(accounts[0]);
         setupKeythingsListeners();
+
+        // Save connection state to localStorage for KeetaDex to detect
+        localStorage.setItem('keythingsConnected', 'true');
+        localStorage.setItem('keythingsAddress', accounts[0]);
+
         toast({
           title: "Connected to Keythings",
           description: `Connected to ${truncate(accounts[0])}`,
@@ -100,6 +105,11 @@ export default function ConnectButton() {
   const handleKeythingsDisconnect = () => {
     setKeythingsAddress(null);
     setOpen(false);
+
+    // Clear localStorage markers when disconnecting
+    localStorage.removeItem('keythingsConnected');
+    localStorage.removeItem('keythingsAddress');
+
     toast({
       title: "Disconnected",
       description: "Disconnected from Keythings wallet",

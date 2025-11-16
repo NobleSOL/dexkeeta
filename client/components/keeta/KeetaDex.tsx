@@ -210,6 +210,19 @@ export default function KeetaDex() {
     }
   }, []);
 
+  // Watch for Keythings connection from header
+  useEffect(() => {
+    // Check if Keythings was connected from the header
+    const keythingsConnectedFromHeader = localStorage.getItem('keythingsConnected') === 'true';
+    const keythingsAddressFromHeader = localStorage.getItem('keythingsAddress');
+
+    if (keythingsConnectedFromHeader && keythingsAddressFromHeader && !wallet) {
+      // Keythings was connected from header but KeetaDex wallet state is not set up
+      console.log('🔍 Detected Keythings connection from header, setting up KeetaDex wallet...');
+      connectKeythingsWallet();
+    }
+  }, [wallet]);
+
   // Fetch pools and positions when wallet is loaded
   useEffect(() => {
     if (wallet?.address) {
@@ -594,6 +607,9 @@ export default function KeetaDex() {
     setKeythingsConnected(false);
     setKeythingsAddress(null);
     localStorage.removeItem("keetaWallet");
+    // Also clear header connection markers
+    localStorage.removeItem('keythingsConnected');
+    localStorage.removeItem('keythingsAddress');
     setPools([]);
     setPositions([]);
     toast({
