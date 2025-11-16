@@ -410,9 +410,8 @@ export default function KeetaDex() {
       console.log('🔍 Importing wallet (client-side)...');
       console.log('🔍 Account index:', accountIndex);
 
-      // Clear old positions data before importing new wallet
+      // Clear old positions data before importing new wallet (pools are global, kept intact)
       setPositions([]);
-      setPools([]);
 
       // Derive address from seed (client-side)
       const address = getAddressFromSeed(seed, accountIndex);
@@ -549,9 +548,8 @@ export default function KeetaDex() {
       const address = accounts[0];
       console.log('✅ Connected to Keythings:', address);
 
-      // Clear old positions/pools data
+      // Clear old positions data (pools are global, not user-specific)
       setPositions([]);
-      setPools([]);
 
       // Fetch balances using Keythings' native API
       console.log('📊 Fetching balances via Keythings...');
@@ -640,7 +638,7 @@ export default function KeetaDex() {
     // Also clear header connection markers
     localStorage.removeItem('keythingsConnected');
     localStorage.removeItem('keythingsAddress');
-    setPools([]);
+    // Only clear positions (user-specific), keep pools (public data)
     setPositions([]);
     toast({
       title: "Wallet Disconnected",
