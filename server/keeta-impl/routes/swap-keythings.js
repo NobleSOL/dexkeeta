@@ -38,7 +38,7 @@ router.post('/complete', async (req, res) => {
       });
     }
 
-    const opsClient = getOpsClient();
+    const opsClient = await getOpsClient();
     const poolManager = await getPoolManager();
 
     // Find the pool instance
@@ -57,7 +57,7 @@ router.post('/complete', async (req, res) => {
     const userAccount = accountFromAddress(userAddress);
     const poolAccount = accountFromAddress(poolAddress);
 
-    const tx2Builder = opsClient.initBuilder();
+    const tx2Builder = opsClient.client.initBuilder();
     tx2Builder.sendOnBehalf(
       poolAccount,
       userAccount,
@@ -65,7 +65,7 @@ router.post('/complete', async (req, res) => {
       tokenOutAccount
     );
 
-    await opsClient.publishBuilder(tx2Builder);
+    await opsClient.client.publishBuilder(tx2Builder);
 
     // Extract TX2 block hash
     let tx2Hash = null;
