@@ -223,6 +223,33 @@ export default function KeetaDex() {
     }
   }, [wallet]);
 
+  // Watch for disconnection from header (localStorage changes)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      // If keythingsConnected was removed and we're currently connected, disconnect
+      if (e.key === 'keythingsConnected' && e.newValue === null && wallet?.isKeythings) {
+        console.log('🔍 Detected Keythings disconnection from header (cross-tab), disconnecting DEX card...');
+        disconnectWallet();
+      }
+    };
+
+    // Also poll localStorage every second for same-tab disconnection
+    // (storage event only fires across tabs)
+    const checkInterval = setInterval(() => {
+      const isConnectedInStorage = localStorage.getItem('keythingsConnected') === 'true';
+      if (!isConnectedInStorage && wallet?.isKeythings) {
+        console.log('🔍 Detected Keythings disconnection from header (same-tab), disconnecting DEX card...');
+        disconnectWallet();
+      }
+    }, 1000);
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(checkInterval);
+    };
+  }, [wallet]);
+
   // Fetch pools and positions when wallet is loaded
   useEffect(() => {
     if (wallet?.address) {
@@ -566,11 +593,12 @@ export default function KeetaDex() {
 
       console.log('🔌 Connecting to Keythings wallet...');
 
-      // Request connection
+      // Request connection - this will prompt the wallet popup
       const accounts = await connectKeythings();
 
       if (!accounts || accounts.length === 0) {
-        throw new Error("Please unlock your Keythings wallet and ensure you have an account created. Then try connecting again.");
+        // User likely rejected the connection or has no accounts
+        throw new Error("Connection cancelled or no accounts found. Please unlock your Keythings wallet and try again.");
       }
 
       const address = accounts[0];
@@ -647,8 +675,10 @@ export default function KeetaDex() {
         description: `Connected to ${address.substring(0, 20)}...`,
       });
 
-      // Note: We'll save to localStorage but mark it as Keythings
+      // Save to localStorage (both for this component and header sync)
       localStorage.setItem("keetaWallet", JSON.stringify(walletData));
+      localStorage.setItem('keythingsConnected', 'true');
+      localStorage.setItem('keythingsAddress', address);
 
       // Fetch data (balances will be empty initially - need to implement Keythings balance fetching)
       console.log('📊 Loading pools and positions...');
