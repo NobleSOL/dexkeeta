@@ -58,11 +58,15 @@ router.post('/complete', async (req, res) => {
     const poolAccount = accountFromAddress(poolAddress);
 
     const tx2Builder = opsClient.initBuilder();
-    tx2Builder.sendOnBehalf(
-      poolAccount,
+
+    // Pool sends tokenOut to user using SEND_ON_BEHALF
+    // { account: poolAccount } tells OPS to send on behalf of pool account
+    tx2Builder.send(
       userAccount,
       BigInt(amountOut),
-      tokenOutAccount
+      tokenOutAccount,
+      undefined,
+      { account: poolAccount }
     );
 
     await opsClient.publishBuilder(tx2Builder);
