@@ -575,14 +575,28 @@ export default function KeetaDex() {
 
       console.log('✅ Keythings balances:', balances);
 
-      // Transform Keythings balances to our token format
-      const tokens = balances.map((bal: any) => ({
-        address: bal.token,
-        symbol: bal.token === 'KTA' ? 'KTA' : bal.token.slice(0, 8), // Use first 8 chars as symbol for custom tokens
-        balance: bal.balance,
-        balanceFormatted: (parseFloat(bal.balance) / 1e9).toFixed(4), // Assuming 9 decimals
-        decimals: 9,
-      }));
+      // Fetch metadata (symbol, decimals) for each token
+      console.log('🔍 Fetching token metadata for each token...');
+      const { fetchTokenMetadata } = await import('@/lib/keeta-client');
+
+      const tokens = await Promise.all(
+        balances.map(async (bal: any) => {
+          const metadata = await fetchTokenMetadata(bal.token);
+          const balanceValue = BigInt(bal.balance);
+          const decimals = metadata.decimals || 9;
+          const balanceFormatted = (Number(balanceValue) / Math.pow(10, decimals)).toFixed(decimals);
+
+          return {
+            address: bal.token,
+            symbol: metadata.symbol,
+            balance: bal.balance,
+            balanceFormatted,
+            decimals,
+          };
+        })
+      );
+
+      console.log('✅ Tokens with metadata:', tokens);
 
       // For Keythings wallet, we use a placeholder seed since signing is done via extension
       const placeholderSeed = "0".repeat(64);
