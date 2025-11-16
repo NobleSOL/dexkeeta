@@ -2,7 +2,6 @@
 // Fetches data directly from Keeta network without backend
 
 import * as KeetaSDK from '@keetanetwork/keetanet-client';
-import * as bip39 from 'bip39';
 
 const KEETA_NODE = 'https://api.test.keeta.com';
 const KEETA_NETWORK = 'test';
@@ -84,35 +83,6 @@ export function getAddressFromSeed(seed: string, accountIndex: number = 0): stri
     console.error('❌ Error in getAddressFromSeed:', error);
     throw error;
   }
-}
-
-/**
- * Convert 24-word mnemonic to hex seed
- */
-export function mnemonicToSeed(mnemonic: string): string {
-  // Normalize whitespace: trim and replace multiple spaces with single space
-  const normalizedMnemonic = mnemonic.trim().replace(/\s+/g, ' ');
-
-  if (!bip39.validateMnemonic(normalizedMnemonic)) {
-    throw new Error('Invalid mnemonic phrase');
-  }
-  const seedBuffer = bip39.mnemonicToSeedSync(normalizedMnemonic);
-  // Use the first 32 bytes for Keeta seed
-  return Buffer.from(seedBuffer).slice(0, 32).toString('hex');
-}
-
-/**
- * Generate a 24-word mnemonic
- */
-export function generateMnemonic(): string {
-  return bip39.generateMnemonic(256); // 256 bits = 24 words
-}
-
-/**
- * Validate a mnemonic phrase
- */
-export function validateMnemonic(mnemonic: string): boolean {
-  return bip39.validateMnemonic(mnemonic);
 }
 
 /**

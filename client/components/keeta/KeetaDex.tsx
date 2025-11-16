@@ -35,9 +35,6 @@ import {
   addLiquidity as addLiquidityClient,
   removeLiquidity as removeLiquidityClient,
   createPool as createPoolClient,
-  generateMnemonic,
-  mnemonicToSeed,
-  validateMnemonic
 } from "@/lib/keeta-client";
 
 // API base URL - uses environment variable if set, otherwise falls back to same origin
@@ -97,11 +94,8 @@ export default function KeetaDex() {
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [showAllTokens, setShowAllTokens] = useState(false);
   const [newSeedBackup, setNewSeedBackup] = useState<string | null>(null);
-  const [newMnemonicBackup, setNewMnemonicBackup] = useState<string | null>(null);
   const [seedBackupConfirmed, setSeedBackupConfirmed] = useState(false);
   const [copiedSeed, setCopiedSeed] = useState(false);
-  const [useMnemonic, setUseMnemonic] = useState(false);
-  const [importMethod, setImportMethod] = useState<'hex' | 'mnemonic'>('hex');
 
   // Swap state
   const [selectedPoolForSwap, setSelectedPoolForSwap] = useState<string>("");
@@ -317,21 +311,10 @@ export default function KeetaDex() {
     try {
       console.log('🔵 Generating wallet (client-side)...');
 
-      let seed: string;
-      let mnemonic: string | null = null;
-
-      if (useMnemonic) {
-        // Generate 24-word mnemonic
-        console.log('🔑 Generating 24-word mnemonic...');
-        mnemonic = generateMnemonic();
-        seed = mnemonicToSeed(mnemonic);
-        console.log('✅ Mnemonic generated and converted to seed');
-      } else {
-        // Generate hex seed directly
-        const walletData = generateWalletClient();
-        seed = walletData.seed;
-        console.log('✅ Hex seed generated');
-      }
+      // Generate hex seed directly
+      const walletData = generateWalletClient();
+      const seed = walletData.seed;
+      console.log('✅ Hex seed generated');
 
       // Derive address from seed
       const address = getAddressFromSeed(seed, 0);
@@ -342,7 +325,6 @@ export default function KeetaDex() {
 
       // Show seed backup modal
       setNewSeedBackup(seed);
-      setNewMnemonicBackup(mnemonic);
       setSeedBackupConfirmed(false);
       console.log('✅ Showing seed backup modal');
     } catch (error: any) {
@@ -370,7 +352,6 @@ export default function KeetaDex() {
     // Now actually import the wallet
     importWalletWithSeed(newSeedBackup);
     setNewSeedBackup(null);
-    setNewMnemonicBackup(null);
     setSeedBackupConfirmed(false);
     setCopiedSeed(false);
   }
@@ -425,42 +406,24 @@ export default function KeetaDex() {
     if (!seedInput) {
       toast({
         title: "Invalid Input",
-        description: "Please enter your seed phrase or hex seed",
+        description: "Please enter your hex seed",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      let seed: string;
-
-      if (importMethod === 'mnemonic') {
-        // Validate and convert mnemonic to seed
-        // Normalize whitespace: trim and replace multiple spaces with single space
-        const normalizedMnemonic = seedInput.trim().replace(/\s+/g, ' ');
-        if (!validateMnemonic(normalizedMnemonic)) {
-          toast({
-            title: "Invalid Mnemonic",
-            description: "Please enter a valid 24-word mnemonic phrase",
-            variant: "destructive",
-          });
-          return;
-        }
-        seed = mnemonicToSeed(normalizedMnemonic);
-        console.log('✅ Mnemonic validated and converted to seed');
-      } else {
-        // Validate hex seed
-        const trimmedSeed = seedInput.trim();
-        if (trimmedSeed.length !== 64 || !/^[0-9a-fA-F]+$/.test(trimmedSeed)) {
-          toast({
-            title: "Invalid Hex Seed",
-            description: "Seed must be 64 hex characters",
-            variant: "destructive",
-          });
-          return;
-        }
-        seed = trimmedSeed;
+      // Validate hex seed
+      const trimmedSeed = seedInput.trim();
+      if (trimmedSeed.length !== 64 || !/^[0-9a-fA-F]+$/.test(trimmedSeed)) {
+        toast({
+          title: "Invalid Hex Seed",
+          description: "Seed must be 64 hex characters",
+          variant: "destructive",
+        });
+        return;
       }
+      const seed = trimmedSeed;
 
       // Use importWalletWithSeed helper with accountIndex 0 (default)
       await importWalletWithSeed(seed, 0);
@@ -969,25 +932,6 @@ export default function KeetaDex() {
               <div className="rounded-xl border border-border/40 bg-secondary/40 p-6 backdrop-blur">
                 <h3 className="text-sm font-semibold mb-4">Generate New Wallet</h3>
                 <div className="space-y-4">
-                  {/* Generation method toggle */}
-                  <div className="flex gap-2">
-                    <Button
-                      variant={!useMnemonic ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setUseMnemonic(false)}
-                      className="flex-1"
-                    >
-                      Hex Seed
-                    </Button>
-                    <Button
-                      variant={useMnemonic ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setUseMnemonic(true)}
-                      className="flex-1"
-                    >
-                      24-Word Mnemonic
-                    </Button>
-                  </div>
                   <Button
                     onClick={generateWallet}
                     disabled={loading}
@@ -1013,40 +957,12 @@ export default function KeetaDex() {
               <div className="rounded-xl border border-border/40 bg-secondary/40 p-6 backdrop-blur">
                 <h3 className="text-sm font-semibold mb-4">Import Existing Wallet</h3>
                 <div className="space-y-4">
-                  {/* Import method toggle */}
-                  <div className="flex gap-2">
-                    <Button
-                      variant={importMethod === 'hex' ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setImportMethod('hex')}
-                      className="flex-1"
-                    >
-                      Hex Seed
-                    </Button>
-                    <Button
-                      variant={importMethod === 'mnemonic' ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setImportMethod('mnemonic')}
-                      className="flex-1"
-                    >
-                      24-Word Mnemonic
-                    </Button>
-                  </div>
-                  {importMethod === 'hex' ? (
-                    <Input
-                      placeholder="Enter your 64-character hex seed"
-                      value={seedInput}
-                      onChange={(e) => setSeedInput(e.target.value)}
-                      className="font-mono text-sm"
-                    />
-                  ) : (
-                    <textarea
-                      placeholder="Enter your 24-word mnemonic phrase (separated by spaces)"
-                      value={seedInput}
-                      onChange={(e) => setSeedInput(e.target.value)}
-                      className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    />
-                  )}
+                  <Input
+                    placeholder="Enter your 64-character hex seed"
+                    value={seedInput}
+                    onChange={(e) => setSeedInput(e.target.value)}
+                    className="font-mono text-sm"
+                  />
                   <Button
                     onClick={importWallet}
                     disabled={loading || !seedInput}
@@ -1074,7 +990,6 @@ export default function KeetaDex() {
         console.log('🟠 Dialog onOpenChange called (no wallet), open:', open);
         if (!open) {
           setNewSeedBackup(null);
-          setNewMnemonicBackup(null);
         }
       }}>
         <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
@@ -1096,14 +1011,13 @@ export default function KeetaDex() {
             <div className="rounded-lg border-2 border-yellow-500/50 bg-yellow-500/10 p-3 sm:p-4">
               <div className="flex items-center justify-between mb-2 gap-2">
                 <span className="text-xs sm:text-sm font-semibold text-yellow-600 dark:text-yellow-400">
-                  {newMnemonicBackup ? 'Your Recovery Phrase:' : 'Your Seed Phrase:'}
+                  Your Seed Phrase:
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    const textToCopy = newMnemonicBackup || newSeedBackup || "";
-                    navigator.clipboard.writeText(textToCopy);
+                    navigator.clipboard.writeText(newSeedBackup || "");
                     setCopiedSeed(true);
                     setTimeout(() => setCopiedSeed(false), 2000);
                   }}
@@ -1122,25 +1036,9 @@ export default function KeetaDex() {
                   )}
                 </Button>
               </div>
-              {newMnemonicBackup ? (
-                // Display 24-word mnemonic in a grid
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {newMnemonicBackup.split(' ').map((word, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-2 bg-black/20 p-2 rounded text-[10px] sm:text-xs"
-                    >
-                      <span className="text-muted-foreground font-mono">{index + 1}.</span>
-                      <span className="font-mono font-semibold">{word}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                // Display hex seed
-                <code className="block break-all text-[10px] sm:text-xs font-mono bg-black/20 p-2 sm:p-3 rounded leading-relaxed">
-                  {newSeedBackup}
-                </code>
-              )}
+              <code className="block break-all text-[10px] sm:text-xs font-mono bg-black/20 p-2 sm:p-3 rounded leading-relaxed">
+                {newSeedBackup}
+              </code>
             </div>
 
             {/* Warning Checklist */}
@@ -1182,7 +1080,6 @@ export default function KeetaDex() {
               variant="outline"
               onClick={() => {
                 setNewSeedBackup(null);
-                setNewMnemonicBackup(null);
                 setSeedBackupConfirmed(false);
                 setCopiedSeed(false);
               }}
@@ -1896,7 +1793,6 @@ export default function KeetaDex() {
         console.log('🟠 Dialog onOpenChange called, open:', open);
         if (!open) {
           setNewSeedBackup(null);
-          setNewMnemonicBackup(null);
         }
       }}>
         <DialogContent className="sm:max-w-2xl">
@@ -1918,14 +1814,13 @@ export default function KeetaDex() {
             <div className="rounded-lg border-2 border-yellow-500/50 bg-yellow-500/10 p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">
-                  {newMnemonicBackup ? 'Your Recovery Phrase:' : 'Your Seed Phrase:'}
+                  Your Seed Phrase:
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    const textToCopy = newMnemonicBackup || newSeedBackup || "";
-                    navigator.clipboard.writeText(textToCopy);
+                    navigator.clipboard.writeText(newSeedBackup || "");
                     setCopiedSeed(true);
                     setTimeout(() => setCopiedSeed(false), 2000);
                   }}
@@ -1944,25 +1839,9 @@ export default function KeetaDex() {
                   )}
                 </Button>
               </div>
-              {newMnemonicBackup ? (
-                // Display 24-word mnemonic in a grid
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {newMnemonicBackup.split(' ').map((word, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-2 bg-black/20 p-2 rounded text-xs"
-                    >
-                      <span className="text-muted-foreground font-mono">{index + 1}.</span>
-                      <span className="font-mono font-semibold">{word}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                // Display hex seed
-                <code className="block break-all text-xs font-mono bg-black/20 p-3 rounded">
-                  {newSeedBackup}
-                </code>
-              )}
+              <code className="block break-all text-xs font-mono bg-black/20 p-3 rounded">
+                {newSeedBackup}
+              </code>
             </div>
 
             {/* Warning Checklist */}
@@ -2004,7 +1883,6 @@ export default function KeetaDex() {
               variant="outline"
               onClick={() => {
                 setNewSeedBackup(null);
-                setNewMnemonicBackup(null);
                 setSeedBackupConfirmed(false);
                 setCopiedSeed(false);
               }}
