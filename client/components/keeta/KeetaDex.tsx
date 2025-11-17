@@ -1124,9 +1124,9 @@ export default function KeetaDex() {
       console.log('💧 Adding liquidity (calling keeta-client addLiquidity)...');
       console.log('  Using decimals:', pool.decimalsA, pool.decimalsB);
 
-      // Execute add liquidity - this calls the backend API which creates LP STORAGE accounts
+      // Execute add liquidity - this calls the backend API which uses OPS account
       const result = await addLiquidityClient(
-        wallet.seed,
+        wallet.address,
         selectedPoolForLiq,
         pool.tokenA,
         pool.tokenB,

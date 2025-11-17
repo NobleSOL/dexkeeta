@@ -36,7 +36,7 @@ function toHumanReadable(atomicAmount, decimals) {
 router.post('/add', async (req, res) => {
   try {
     const {
-      userSeed,
+      userAddress,
       tokenA,
       tokenB,
       amountADesired,
@@ -45,14 +45,14 @@ router.post('/add', async (req, res) => {
       amountBMin = '0',
     } = req.body;
 
-    if (!userSeed || !tokenA || !tokenB || !amountADesired || !amountBDesired) {
+    if (!userAddress || !tokenA || !tokenB || !amountADesired || !amountBDesired) {
       return res.status(400).json({
-        error: 'Missing required fields (userSeed, tokenA, tokenB, amountADesired, amountBDesired)',
+        error: 'Missing required fields (userAddress, tokenA, tokenB, amountADesired, amountBDesired)',
       });
     }
 
-    // Create user client from seed (for permissionless operations)
-    const { client: userClient, address: userAddress } = createUserClient(userSeed);
+    // Use OPS client (server-side operations account) - it has the funds
+    const { client: opsClient, address: opsAddress } = getOpsClient();
 
     const poolManager = await getPoolManager();
 
@@ -70,12 +70,12 @@ router.post('/add', async (req, res) => {
     const existingPool = poolManager.getPool(tokenA, tokenB);
     if (!existingPool) {
       console.log(`🏗️ Pool doesn't exist, creating new pool for ${tokenA} / ${tokenB}...`);
-      await poolManager.createPool(tokenA, tokenB, userAddress);
+      await poolManager.createPool(tokenA, tokenB, opsAddress);
     }
 
-    // Add liquidity using user's client
+    // Add liquidity using OPS client (which has the funds)
     const result = await poolManager.addLiquidity(
-      userClient,
+      opsClient,
       userAddress,
       tokenA,
       tokenB,
