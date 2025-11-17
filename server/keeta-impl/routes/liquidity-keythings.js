@@ -101,6 +101,21 @@ router.post('/complete', async (req, res) => {
     // TX2: Mint LP tokens to user
     console.log('📝 TX2: Minting LP tokens to user...');
 
+    // Ensure LP token address is available
+    if (!pool.lpTokenAddress) {
+      console.log('⚠️ LP token address not set on pool, looking up from database...');
+      // Look up LP token from database
+      const poolData = await poolManager.repository.getPoolByAddress(poolAddress);
+      if (poolData && poolData.lp_token_address) {
+        pool.lpTokenAddress = poolData.lp_token_address;
+        console.log(`   Found LP token in database: ${pool.lpTokenAddress}`);
+      }
+
+      if (!pool.lpTokenAddress) {
+        throw new Error('LP token address not found for pool. Pool may need to be recreated.');
+      }
+    }
+
     const userAccount = accountFromAddress(userAddress);
     const poolAccount = accountFromAddress(poolAddress);
     const lpTokenAccount = accountFromAddress(pool.lpTokenAddress);
