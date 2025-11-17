@@ -476,18 +476,28 @@ export async function createLPToken(poolAddress, tokenA, tokenB) {
     throw new Error(`LP token creation failed: ${error.message}`);
   }
 
-  // Wait for blockchain finalization (5 seconds)
-  console.log(`⏳ Waiting for blockchain finalization...`);
-  await new Promise(resolve => setTimeout(resolve, 5000));
+  // Wait for blockchain finalization (10 seconds to be safe)
+  console.log(`⏳ Waiting for blockchain finalization (10s)...`);
+  await new Promise(resolve => setTimeout(resolve, 10000));
 
   // Verify the LP token was actually created on-chain
   console.log(`🔍 Verifying LP token was created...`);
+  console.log(`   Checking address: ${lpTokenAddress}`);
   try {
     const accountsInfo = await client.client.getAccountsInfo([lpTokenAddress]);
-    const accountInfo = accountsInfo && accountsInfo.length > 0 ? accountsInfo[0] : null;
+    console.log(`   getAccountsInfo result:`, accountsInfo ? `${accountsInfo.length} account(s)` : 'null');
 
-    if (!accountInfo || !accountInfo.info || !accountInfo.info.metadata) {
-      throw new Error('LP token account was not created or has no metadata');
+    const accountInfo = accountsInfo && accountsInfo.length > 0 ? accountsInfo[0] : null;
+    console.log(`   accountInfo exists:`, !!accountInfo);
+    console.log(`   accountInfo.info exists:`, !!(accountInfo && accountInfo.info));
+    console.log(`   accountInfo.info.metadata exists:`, !!(accountInfo && accountInfo.info && accountInfo.info.metadata));
+
+    if (!accountInfo || !accountInfo.info) {
+      throw new Error(`LP token account was not created on-chain (accountInfo: ${!!accountInfo}, info: ${!!(accountInfo && accountInfo.info)})`);
+    }
+
+    if (!accountInfo.info.metadata) {
+      throw new Error(`LP token exists but has no metadata (account_type: ${accountInfo.info.account_type}, name: ${accountInfo.info.name})`);
     }
 
     console.log(`✅ LP token created and verified: ${lpTokenAddress}`);
