@@ -27,22 +27,28 @@ const router = express.Router();
  */
 router.post('/complete', async (req, res) => {
   try {
+    console.log('💧 Keythings add liquidity /complete endpoint called');
+    console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
+
     const { userAddress, poolAddress, tokenA, tokenB, amountA, amountB } = req.body;
 
-    console.log('💧 Completing Keythings add liquidity (TX2)...');
+    if (!userAddress || !poolAddress || !tokenA || !tokenB || !amountA || !amountB) {
+      console.error('❌ Missing required fields!');
+      console.error('   Received:', { userAddress: !!userAddress, poolAddress: !!poolAddress, tokenA: !!tokenA, tokenB: !!tokenB, amountA: !!amountA, amountB: !!amountB });
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: userAddress, poolAddress, tokenA, tokenB, amountA, amountB',
+        received: req.body,
+      });
+    }
+
+    console.log('✅ All required fields present');
     console.log(`   User: ${userAddress.slice(0, 12)}...`);
     console.log(`   Pool: ${poolAddress.slice(0, 12)}...`);
     console.log(`   Token A: ${tokenA.slice(0, 12)}...`);
     console.log(`   Token B: ${tokenB.slice(0, 12)}...`);
     console.log(`   Amount A: ${amountA}`);
     console.log(`   Amount B: ${amountB}`);
-
-    if (!userAddress || !poolAddress || !tokenA || !tokenB || !amountA || !amountB) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: userAddress, poolAddress, tokenA, tokenB, amountA, amountB',
-      });
-    }
 
     const opsClient = await getOpsClient();
     const poolManager = await getPoolManager();
