@@ -1121,33 +1121,108 @@ export default function KeetaDex() {
       const pool = pools.find((p) => p.poolAddress === selectedPoolForLiq);
       if (!pool) return;
 
-      console.log('💧 Adding liquidity (calling keeta-client addLiquidity)...');
+      console.log('💧 Adding liquidity...');
       console.log('  Using decimals:', pool.decimalsA, pool.decimalsB);
 
-      // Execute add liquidity - user sends tokens, OPS handles LP token creation
-      const result = await addLiquidityClient(
-        wallet.seed,
-        selectedPoolForLiq,
-        pool.tokenA,
-        pool.tokenB,
-        liqAmountA,
-        liqAmountB,
-        pool.decimalsA || 9,
-        pool.decimalsB || 9,
-        wallet.accountIndex || 0
-      );
+      // Check if this is a Keythings wallet
+      if (wallet.isKeythings) {
+        console.log('💧 Executing Keythings add liquidity (two-transaction flow)...');
 
-      if (result.success) {
-        // Build explorer link
-        const explorerUrl = result.blockHash
-          ? `https://explorer.test.keeta.com/block/${result.blockHash}`
+        // Import utilities
+        const { toAtomic } = await import('@/lib/keeta-swap-math');
+        const { getKeythingsProvider } = await import('@/lib/keythings-provider');
+
+        // Get Keythings user client for transaction signing
+        const provider = getKeythingsProvider();
+        if (!provider) {
+          throw new Error('Keythings provider not found');
+        }
+
+        console.log('🔐 Requesting user client from Keythings...');
+        const userClient = await provider.getUserClient();
+
+        // Convert amounts to atomic units
+        const amountAAtomic = toAtomic(parseFloat(liqAmountA), pool.decimalsA || 9);
+        const amountBAtomic = toAtomic(parseFloat(liqAmountB), pool.decimalsB || 9);
+
+        console.log('💰 Liquidity amounts:', {
+          amountA: amountAAtomic.toString(),
+          amountB: amountBAtomic.toString(),
+        });
+
+        // Import KeetaNet for account creation
+        const KeetaNet = await import('@keetanetwork/keetanet-client');
+        const tokenAAccount = KeetaNet.lib.Account.fromPublicKeyString(pool.tokenA);
+        const tokenBAccount = KeetaNet.lib.Account.fromPublicKeyString(pool.tokenB);
+
+        // Build TX1: User sends tokenA + tokenB to pool
+        console.log('📝 Building TX1 (user sends tokens to pool)...');
+        const tx1Builder = userClient.initBuilder();
+
+        // Send tokenA to pool
+        tx1Builder.send(pool.poolAddress, amountAAtomic, tokenAAccount);
+
+        // Send tokenB to pool
+        tx1Builder.send(pool.poolAddress, amountBAtomic, tokenBAccount);
+
+        // Publish TX1 (will prompt user via Keythings UI)
+        console.log('✍️ Prompting user to sign TX1 via Keythings...');
+        await userClient.publishBuilder(tx1Builder);
+
+        // Extract TX1 block hash for logging
+        let tx1Hash = null;
+        if (tx1Builder.blocks && tx1Builder.blocks.length > 0) {
+          const block = tx1Builder.blocks[0];
+          if (block && block.hash) {
+            if (typeof block.hash === 'string') {
+              tx1Hash = block.hash.toUpperCase();
+            } else if (block.hash.toString) {
+              const hashStr = block.hash.toString();
+              if (hashStr.match(/^[0-9A-Fa-f]+$/)) {
+                tx1Hash = hashStr.toUpperCase();
+              } else if (block.hash.toString('hex')) {
+                tx1Hash = block.hash.toString('hex').toUpperCase();
+              }
+            }
+          }
+        }
+
+        console.log(`✅ TX1 completed: ${tx1Hash || 'no hash'}`);
+
+        // Call backend to execute TX2 (mint LP tokens to user)
+        console.log('📝 Calling backend to execute TX2 (mint LP tokens)...');
+        const tx2Response = await fetch(`${API_BASE}/liquidity/keythings/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userAddress: wallet.address,
+            poolAddress: pool.poolAddress,
+            tokenA: pool.tokenA,
+            tokenB: pool.tokenB,
+            amountA: amountAAtomic.toString(),
+            amountB: amountBAtomic.toString(),
+          }),
+        });
+
+        const tx2Result = await tx2Response.json();
+
+        if (!tx2Result.success) {
+          throw new Error(tx2Result.error || 'TX2 failed');
+        }
+
+        console.log(`✅ TX2 completed: ${tx2Result.result?.blockHash || 'no hash'}`);
+
+        // Build explorer link (use TX2 hash if available, otherwise TX1)
+        const blockHash = tx2Result.result?.blockHash || tx1Hash;
+        const explorerUrl = blockHash
+          ? `https://explorer.test.keeta.com/block/${blockHash}`
           : `https://explorer.test.keeta.com/account/${wallet.address}`;
 
         toast({
           title: "Liquidity Added!",
           description: (
             <div className="space-y-1">
-              <div>Added {result.amountA} {pool.symbolA} and {result.amountB} {pool.symbolB}</div>
+              <div>Added {liqAmountA} {pool.symbolA} and {liqAmountB} {pool.symbolB}</div>
               <a
                 href={explorerUrl}
                 target="_blank"
@@ -1174,8 +1249,64 @@ export default function KeetaDex() {
         await refreshBalances();
         await loadPools();
         await fetchPositions();
+
       } else {
-        throw new Error(result.error || "Failed to add liquidity");
+        // Seed wallet: Traditional single-endpoint flow
+        console.log('💧 Executing seed wallet add liquidity via backend API...');
+
+        // Execute add liquidity - user sends tokens, OPS handles LP token creation
+        const result = await addLiquidityClient(
+          wallet.seed,
+          selectedPoolForLiq,
+          pool.tokenA,
+          pool.tokenB,
+          liqAmountA,
+          liqAmountB,
+          pool.decimalsA || 9,
+          pool.decimalsB || 9,
+          wallet.accountIndex || 0
+        );
+
+        if (result.success) {
+          // Build explorer link
+          const explorerUrl = result.blockHash
+            ? `https://explorer.test.keeta.com/block/${result.blockHash}`
+            : `https://explorer.test.keeta.com/account/${wallet.address}`;
+
+          toast({
+            title: "Liquidity Added!",
+            description: (
+              <div className="space-y-1">
+                <div>Added {result.amountA} {pool.symbolA} and {result.amountB} {pool.symbolB}</div>
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sky-400 hover:text-sky-300 underline text-sm flex items-center gap-1"
+                >
+                  View on Keeta Explorer
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
+            ),
+          });
+
+          // Clear form
+          setLiqAmountA("");
+          setLiqAmountB("");
+
+          // Wait for blockchain to sync before refreshing
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // Refresh data
+          await refreshBalances();
+          await loadPools();
+          await fetchPositions();
+        } else {
+          throw new Error(result.error || "Failed to add liquidity");
+        }
       }
     } catch (error: any) {
       toast({
