@@ -734,6 +734,7 @@ export async function addLiquidity(
     console.log('  amountBDesired:', amountBDesired);
     console.log('  decimalsA:', decimalsA);
     console.log('  decimalsB:', decimalsB);
+    console.log('  accountIndex:', accountIndex);
 
     // Call backend API - user sends tokens, OPS creates LP tokens (for gas)
     const API_BASE = import.meta.env.VITE_KEETA_API_BASE || `${window.location.origin}/api`;
