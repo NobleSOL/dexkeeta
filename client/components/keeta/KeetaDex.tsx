@@ -1396,9 +1396,41 @@ export default function KeetaDex() {
         console.log('🔐 Requesting user client from Keythings...');
         const userClient = await provider.getUserClient();
 
-        // Convert amounts to atomic units (assuming 9 decimals - will be corrected by backend)
-        const amountAAtomic = toAtomic(parseFloat(amountA), 9);
-        const amountBAtomic = toAtomic(parseFloat(amountB), 9);
+        // Helper function to fetch token decimals from Keeta RPC
+        async function fetchTokenDecimals(tokenAddress: string): Promise<number> {
+          const response = await fetch('https://api.test.keeta.com/rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'getAccountsInfo',
+              params: { accounts: [tokenAddress] }
+            })
+          });
+          const data = await response.json();
+          const tokenInfo = data.result?.accounts?.[tokenAddress];
+          if (!tokenInfo?.info?.metadata) {
+            throw new Error(`Could not fetch metadata for token ${tokenAddress}`);
+          }
+          // Decode base64 metadata (browser-compatible)
+          const metadataJson = atob(tokenInfo.info.metadata);
+          const metadata = JSON.parse(metadataJson);
+          return metadata.decimals || 9; // Default to 9 if not specified
+        }
+
+        // Fetch actual decimals for both tokens
+        console.log('🔍 Fetching token decimals...');
+        const [decimalsA, decimalsB] = await Promise.all([
+          fetchTokenDecimals(tokenA),
+          fetchTokenDecimals(tokenB),
+        ]);
+        console.log(`  Token A decimals: ${decimalsA}`);
+        console.log(`  Token B decimals: ${decimalsB}`);
+
+        // Convert amounts to atomic units using actual decimals
+        const amountAAtomic = toAtomic(parseFloat(amountA), decimalsA);
+        const amountBAtomic = toAtomic(parseFloat(amountB), decimalsB);
 
         console.log('💰 Liquidity amounts:', {
           amountA: amountAAtomic.toString(),
