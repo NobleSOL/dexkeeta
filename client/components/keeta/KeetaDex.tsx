@@ -1085,11 +1085,19 @@ export default function KeetaDex() {
 
           toast({
             title: "Pool Created!",
-            description: "Pool created successfully. Please approve the transaction to add initial liquidity.",
+            description: "Waiting for pool to be indexed by Keythings...",
           });
 
-          // Wait a moment for state to update, then trigger add liquidity
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // IMPORTANT: Wait 3 seconds for pool account to be indexed by Keythings extension
+          // Without this delay, Keythings won't be able to see the pool account and TX1 will fail
+          console.log('⏳ Waiting 3 seconds for Keythings to index pool account...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+
+          console.log('✅ Pool should be indexed, triggering add liquidity...');
+          toast({
+            title: "Ready to Add Liquidity",
+            description: "Please approve the transaction to add initial liquidity.",
+          });
 
           // Trigger add liquidity flow (will use keythings two-tx flow)
           await addLiquidity();
