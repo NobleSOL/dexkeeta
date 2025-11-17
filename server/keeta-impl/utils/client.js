@@ -485,19 +485,16 @@ export async function createLPToken(poolAddress, tokenA, tokenB) {
   console.log(`   Checking address: ${lpTokenAddress}`);
   try {
     const accountsInfo = await client.client.getAccountsInfo([lpTokenAddress]);
-    console.log(`   getAccountsInfo result:`, accountsInfo ? `${accountsInfo.length} account(s)` : 'null');
 
-    const accountInfo = accountsInfo && accountsInfo.length > 0 ? accountsInfo[0] : null;
-    console.log(`   accountInfo exists:`, !!accountInfo);
-    console.log(`   accountInfo.info exists:`, !!(accountInfo && accountInfo.info));
-    console.log(`   accountInfo.info.metadata exists:`, !!(accountInfo && accountInfo.info && accountInfo.info.metadata));
+    // getAccountsInfo returns an object with addresses as keys, not an array!
+    const accountInfo = accountsInfo && accountsInfo[lpTokenAddress] ? accountsInfo[lpTokenAddress] : null;
 
     if (!accountInfo || !accountInfo.info) {
-      throw new Error(`LP token account was not created on-chain (accountInfo: ${!!accountInfo}, info: ${!!(accountInfo && accountInfo.info)})`);
+      throw new Error(`LP token account was not created on-chain`);
     }
 
     if (!accountInfo.info.metadata) {
-      throw new Error(`LP token exists but has no metadata (account_type: ${accountInfo.info.account_type}, name: ${accountInfo.info.name})`);
+      throw new Error(`LP token exists but has no metadata`);
     }
 
     console.log(`✅ LP token created and verified: ${lpTokenAddress}`);
