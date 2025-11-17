@@ -476,6 +476,10 @@ export async function createLPToken(poolAddress, tokenA, tokenB) {
     throw new Error(`LP token creation failed: ${error.message}`);
   }
 
+  // Wait for blockchain finalization (5 seconds)
+  console.log(`⏳ Waiting for blockchain finalization...`);
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
   // Verify the LP token was actually created on-chain
   console.log(`🔍 Verifying LP token was created...`);
   try {
