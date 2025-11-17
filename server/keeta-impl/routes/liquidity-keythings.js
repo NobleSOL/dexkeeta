@@ -154,11 +154,10 @@ router.post('/complete', async (req, res) => {
     tx2Builder.send(
       userAccount,
       liquidity,
-      undefined, // undefined token = native KTA (but we're sending custom token)
+      lpTokenAccount,  // The token being sent is the LP token
       undefined,
       {
-        account: lpTokenAccount, // Send from LP token account
-        token: lpTokenAccount,   // The token being sent is the LP token itself
+        account: lpTokenAccount, // Send from LP token account (token sends itself)
       }
     );
 
