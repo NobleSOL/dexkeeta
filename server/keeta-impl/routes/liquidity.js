@@ -37,6 +37,7 @@ router.post('/add', async (req, res) => {
   try {
     const {
       userSeed,
+      accountIndex = 0,
       tokenA,
       tokenB,
       amountADesired,
@@ -52,7 +53,7 @@ router.post('/add', async (req, res) => {
     }
 
     // Create user client - user sends their own tokens to pool
-    const { client: userClient, address: userAddress } = createUserClient(userSeed);
+    const { client: userClient, address: userAddress } = createUserClient(userSeed, accountIndex);
 
     const poolManager = await getPoolManager();
 
@@ -122,6 +123,7 @@ router.post('/remove', async (req, res) => {
   try {
     const {
       userSeed,
+      accountIndex = 0,
       tokenA,
       tokenB,
       liquidity,
@@ -136,7 +138,7 @@ router.post('/remove', async (req, res) => {
     }
 
     // Create user client from seed (for permissionless operations)
-    const { client: userClient, address: userAddress } = createUserClient(userSeed);
+    const { client: userClient, address: userAddress } = createUserClient(userSeed, accountIndex);
 
     const poolManager = await getPoolManager();
 

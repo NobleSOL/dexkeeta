@@ -745,6 +745,7 @@ export async function addLiquidity(
       },
       body: JSON.stringify({
         userSeed: seed,
+        accountIndex,
         tokenA,
         tokenB,
         amountADesired,
