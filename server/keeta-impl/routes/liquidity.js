@@ -3,7 +3,7 @@ import express from 'express';
 import { getPoolManager } from '../contracts/PoolManager.js';
 import { Pool } from '../contracts/Pool.js';
 import { toAtomic, getPairKey } from '../utils/constants.js';
-import { fetchTokenDecimals, createUserClient } from '../utils/client.js';
+import { fetchTokenDecimals, createUserClient, getOpsClient } from '../utils/client.js';
 
 const router = express.Router();
 
@@ -36,7 +36,7 @@ function toHumanReadable(atomicAmount, decimals) {
 router.post('/add', async (req, res) => {
   try {
     const {
-      userAddress,
+      userSeed,
       tokenA,
       tokenB,
       amountADesired,
@@ -45,14 +45,14 @@ router.post('/add', async (req, res) => {
       amountBMin = '0',
     } = req.body;
 
-    if (!userAddress || !tokenA || !tokenB || !amountADesired || !amountBDesired) {
+    if (!userSeed || !tokenA || !tokenB || !amountADesired || !amountBDesired) {
       return res.status(400).json({
-        error: 'Missing required fields (userAddress, tokenA, tokenB, amountADesired, amountBDesired)',
+        error: 'Missing required fields (userSeed, tokenA, tokenB, amountADesired, amountBDesired)',
       });
     }
 
-    // Use OPS client (server-side operations account) - it has the funds
-    const { client: opsClient, address: opsAddress } = getOpsClient();
+    // Create user client - user sends their own tokens to pool
+    const { client: userClient, address: userAddress } = createUserClient(userSeed);
 
     const poolManager = await getPoolManager();
 
@@ -70,12 +70,12 @@ router.post('/add', async (req, res) => {
     const existingPool = poolManager.getPool(tokenA, tokenB);
     if (!existingPool) {
       console.log(`🏗️ Pool doesn't exist, creating new pool for ${tokenA} / ${tokenB}...`);
-      await poolManager.createPool(tokenA, tokenB, opsAddress);
+      await poolManager.createPool(tokenA, tokenB, userAddress);
     }
 
-    // Add liquidity using OPS client (which has the funds)
+    // Add liquidity - user sends tokens, OPS handles LP token creation
     const result = await poolManager.addLiquidity(
-      opsClient,
+      userClient,
       userAddress,
       tokenA,
       tokenB,

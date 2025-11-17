@@ -715,7 +715,7 @@ export async function executeSwap(
  * Add liquidity to a pool
  */
 export async function addLiquidity(
-  userAddress: string,
+  seed: string,
   poolAddress: string,
   tokenA: string,
   tokenB: string,
@@ -727,7 +727,6 @@ export async function addLiquidity(
 ): Promise<{ success: boolean; amountA?: string; amountB?: string; blockHash?: string; error?: string }> {
   try {
     console.log('💧 Adding liquidity via backend API (with on-chain LP tracking)...');
-    console.log('  userAddress:', userAddress);
     console.log('  poolAddress:', poolAddress);
     console.log('  tokenA:', tokenA);
     console.log('  tokenB:', tokenB);
@@ -736,8 +735,7 @@ export async function addLiquidity(
     console.log('  decimalsA:', decimalsA);
     console.log('  decimalsB:', decimalsB);
 
-    // Call backend API which handles LP STORAGE account creation and on-chain tracking
-    // Backend uses OPS client (which has funds) to perform the transaction
+    // Call backend API - user sends tokens, OPS creates LP tokens (for gas)
     const API_BASE = import.meta.env.VITE_KEETA_API_BASE || `${window.location.origin}/api`;
     console.log('📡 Calling fetch to', `${API_BASE}/liquidity/add...`);
     const response = await fetch(`${API_BASE}/liquidity/add`, {
@@ -746,7 +744,7 @@ export async function addLiquidity(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        userAddress,
+        userSeed: seed,
         tokenA,
         tokenB,
         amountADesired,
