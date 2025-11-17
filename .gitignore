@@ -41,6 +41,18 @@ keeta/*.mjs
 test-*.mjs
 test-*.cjs
 diagnose-*.mjs
+check-*.mjs
+debug-*.mjs
+delete-*.mjs
+fix-*.mjs
+find-*.mjs
+list-*.mjs
+mint-*.mjs
+recover-*.mjs
+investigate-*.mjs
+cleanup-*.mjs
+migrate-*.mjs
+verify-*.mjs
 
 # SEND_ON_BEHALF permission testing scripts
 test-send-on-behalf-permissions.mjs
