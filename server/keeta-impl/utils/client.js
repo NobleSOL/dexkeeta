@@ -469,11 +469,30 @@ export async function createLPToken(poolAddress, tokenA, tokenB) {
   );
 
   // Publish the transaction
-  await client.publishBuilder(builder);
+  try {
+    await client.publishBuilder(builder);
+  } catch (error) {
+    console.error(`❌ Failed to publish LP token creation transaction:`, error.message);
+    throw new Error(`LP token creation failed: ${error.message}`);
+  }
 
-  console.log(`✅ LP token created: ${lpTokenAddress}`);
-  console.log(`   Symbol: ${symbolA}-${symbolB}-LP`);
-  console.log(`   Pool: ${poolAddress.slice(-8)}`);
+  // Verify the LP token was actually created on-chain
+  console.log(`🔍 Verifying LP token was created...`);
+  try {
+    const accountsInfo = await client.client.getAccountsInfo([lpTokenAddress]);
+    const accountInfo = accountsInfo && accountsInfo.length > 0 ? accountsInfo[0] : null;
+
+    if (!accountInfo || !accountInfo.info || !accountInfo.info.metadata) {
+      throw new Error('LP token account was not created or has no metadata');
+    }
+
+    console.log(`✅ LP token created and verified: ${lpTokenAddress}`);
+    console.log(`   Symbol: ${symbolA}-${symbolB}-LP`);
+    console.log(`   Pool: ${poolAddress.slice(-8)}`);
+  } catch (error) {
+    console.error(`❌ LP token verification failed:`, error.message);
+    throw new Error(`LP token verification failed: ${error.message}. The pool cannot be used without a valid LP token.`);
+  }
 
   return lpTokenAddress;
 }
