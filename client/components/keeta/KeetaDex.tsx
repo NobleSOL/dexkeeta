@@ -1045,60 +1045,97 @@ export default function KeetaDex() {
 
       // Call backend API to create pool and add initial liquidity
       // The backend will create a proper STORAGE account with swap functionality
+      const requestBody = wallet.isKeythings
+        ? {
+            creatorAddress: wallet.address, // For keythings: send actual address
+            tokenA: newPoolTokenA,
+            tokenB: newPoolTokenB,
+            amountADesired: liqAmountA,
+            amountBDesired: liqAmountB,
+          }
+        : {
+            userSeed: wallet.seed, // For seed wallets: send seed
+            tokenA: newPoolTokenA,
+            tokenB: newPoolTokenB,
+            amountADesired: liqAmountA,
+            amountBDesired: liqAmountB,
+          };
+
       const response = await fetch(`${API_BASE}/liquidity/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userSeed: wallet.seed,
-          tokenA: newPoolTokenA,
-          tokenB: newPoolTokenB,
-          amountADesired: liqAmountA,
-          amountBDesired: liqAmountB,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        console.log('✅ Pool created with AMM logic and initial liquidity added');
+        // Check if this is a keythings wallet that needs to add liquidity
+        if (data.result?.requiresKeythingsLiquidity) {
+          console.log('✅ Pool created, proceeding with keythings add liquidity flow...');
 
-        // Build explorer link - use pool address to view the newly created pool
-        const poolAddress = data.result.poolAddress;
-        const explorerUrl = poolAddress
-          ? `https://explorer.test.keeta.com/account/${poolAddress}`
-          : `https://explorer.test.keeta.com/account/${wallet.address}`;
+          // Pool created successfully, now add liquidity via keythings flow
+          const poolAddress = data.result.poolAddress;
 
-        toast({
-          title: "Pool Created!",
-          description: (
-            <div className="space-y-1">
-              <div>Added initial liquidity: {liqAmountA} + {liqAmountB}</div>
-              <div className="text-sm text-gray-400">LP shares: {data.result.liquidity}</div>
-              <a
-                href={explorerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-blue-400 hover:text-blue-300 underline block mt-1"
-              >
-                View Pool on Explorer →
-              </a>
-            </div>
-          ),
-        });
+          // Set the selected pool for liquidity
+          setSelectedPoolForLiq(poolAddress);
 
-        // Clear form
-        setNewPoolTokenA("");
-        setNewPoolTokenB("");
-        setLiqAmountA("");
-        setLiqAmountB("");
+          // Refresh pools to get the new pool in the list
+          await loadPools();
 
-        // Wait for blockchain to sync before refreshing
-        await new Promise(resolve => setTimeout(resolve, 2000));
+          toast({
+            title: "Pool Created!",
+            description: "Pool created successfully. Please approve the transaction to add initial liquidity.",
+          });
 
-        // Refresh data
-        await refreshBalances();
-        await loadPools();
-        await fetchPositions();
+          // Wait a moment for state to update, then trigger add liquidity
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // Trigger add liquidity flow (will use keythings two-tx flow)
+          await addLiquidity();
+
+        } else {
+          // Seed wallet: pool created with initial liquidity
+          console.log('✅ Pool created with AMM logic and initial liquidity added');
+
+          // Build explorer link - use pool address to view the newly created pool
+          const poolAddress = data.result.poolAddress;
+          const explorerUrl = poolAddress
+            ? `https://explorer.test.keeta.com/account/${poolAddress}`
+            : `https://explorer.test.keeta.com/account/${wallet.address}`;
+
+          toast({
+            title: "Pool Created!",
+            description: (
+              <div className="space-y-1">
+                <div>Added initial liquidity: {liqAmountA} + {liqAmountB}</div>
+                <div className="text-sm text-gray-400">LP shares: {data.result.liquidity}</div>
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-400 hover:text-blue-300 underline block mt-1"
+                >
+                  View Pool on Explorer →
+                </a>
+              </div>
+            ),
+          });
+
+          // Clear form
+          setNewPoolTokenA("");
+          setNewPoolTokenB("");
+          setLiqAmountA("");
+          setLiqAmountB("");
+
+          // Wait for blockchain to sync before refreshing
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // Refresh data
+          await refreshBalances();
+          await loadPools();
+          await fetchPositions();
+        }
       } else {
         throw new Error(data.error || "Failed to create pool");
       }

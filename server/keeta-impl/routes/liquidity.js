@@ -37,6 +37,7 @@ router.post('/add', async (req, res) => {
   try {
     const {
       userSeed,
+      creatorAddress, // For keythings wallets - actual user address
       accountIndex = 0,
       tokenA,
       tokenB,
@@ -46,14 +47,29 @@ router.post('/add', async (req, res) => {
       amountBMin = '0',
     } = req.body;
 
-    if (!userSeed || !tokenA || !tokenB || !amountADesired || !amountBDesired) {
+    // For keythings wallets: creatorAddress is provided
+    // For seed wallets: userSeed is provided
+    if ((!userSeed && !creatorAddress) || !tokenA || !tokenB || !amountADesired || !amountBDesired) {
       return res.status(400).json({
-        error: 'Missing required fields (userSeed, tokenA, tokenB, amountADesired, amountBDesired)',
+        error: 'Missing required fields (userSeed OR creatorAddress, tokenA, tokenB, amountADesired, amountBDesired)',
       });
     }
 
-    // Create user client - user sends their own tokens to pool
-    const { client: userClient, address: userAddress } = createUserClient(userSeed, accountIndex);
+    // Determine user address
+    let userClient;
+    let userAddress;
+
+    if (creatorAddress) {
+      // Keythings wallet: use provided address, no user client needed for pool creation
+      userAddress = creatorAddress;
+      console.log(`🔑 Keythings wallet detected, using creator address: ${userAddress.slice(0, 20)}...`);
+    } else {
+      // Seed wallet: derive from seed
+      const clientInfo = createUserClient(userSeed, accountIndex);
+      userClient = clientInfo.client;
+      userAddress = clientInfo.address;
+      console.log(`🔑 Seed wallet detected, derived address: ${userAddress.slice(0, 20)}...`);
+    }
 
     const poolManager = await getPoolManager();
 
@@ -69,12 +85,32 @@ router.post('/add', async (req, res) => {
 
     // Check if pool exists, if not create it
     const existingPool = poolManager.getPool(tokenA, tokenB);
+    let poolAddress;
     if (!existingPool) {
       console.log(`🏗️ Pool doesn't exist, creating new pool for ${tokenA} / ${tokenB}...`);
-      await poolManager.createPool(tokenA, tokenB, userAddress);
+      const pool = await poolManager.createPool(tokenA, tokenB, userAddress);
+      poolAddress = pool.poolAddress;
+    } else {
+      poolAddress = existingPool.poolAddress;
     }
 
-    // Add liquidity - user sends tokens, OPS handles LP token creation
+    // For keythings wallets: Only create the pool, don't add liquidity
+    // Frontend will use the two-transaction keythings flow to add liquidity
+    if (creatorAddress) {
+      console.log('🔑 Keythings wallet: Pool created, liquidity must be added via keythings flow');
+      return res.json({
+        success: true,
+        userAddress,
+        poolAddress,
+        message: 'Pool created. Use keythings flow to add liquidity.',
+        result: {
+          poolAddress,
+          requiresKeythingsLiquidity: true,
+        },
+      });
+    }
+
+    // For seed wallets: Add liquidity directly
     const result = await poolManager.addLiquidity(
       userClient,
       userAddress,
@@ -90,6 +126,7 @@ router.post('/add', async (req, res) => {
       success: true,
       userAddress,
       result: {
+        poolAddress,
         amountA: toHumanReadable(result.amountA, decimalsA),
         amountB: toHumanReadable(result.amountB, decimalsB),
         liquidity: result.liquidity.toString(),
