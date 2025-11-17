@@ -66,7 +66,35 @@ router.post('/complete', async (req, res) => {
     await pool.updateReserves();
     const reserveA = pool.reserveA;
     const reserveB = pool.reserveB;
-    const totalSupply = pool.totalSupply;
+
+    // Ensure LP token address is available before fetching total supply
+    if (!pool.lpTokenAddress) {
+      console.log('⚠️ LP token address not set on pool, looking up from database...');
+      // Look up LP token from database
+      const poolData = await poolManager.repository.getPoolByAddress(poolAddress);
+      if (poolData && poolData.lp_token_address) {
+        pool.lpTokenAddress = poolData.lp_token_address;
+        console.log(`   Found LP token in database: ${pool.lpTokenAddress}`);
+      }
+
+      if (!pool.lpTokenAddress) {
+        throw new Error('LP token address not found for pool. Pool may need to be recreated.');
+      }
+    }
+
+    // Fetch total supply from LP token account
+    let totalSupply = 0n;
+    try {
+      const lpTokenAccountInfo = await opsClient.client.getAccountsInfo([pool.lpTokenAddress]);
+      const lpTokenInfo = lpTokenAccountInfo[pool.lpTokenAddress];
+
+      if (lpTokenInfo?.info?.supply) {
+        totalSupply = BigInt(lpTokenInfo.info.supply);
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not fetch LP token supply, assuming first liquidity:', err.message);
+      totalSupply = 0n;
+    }
 
     console.log('📊 Current pool state:', {
       reserveA: reserveA.toString(),
