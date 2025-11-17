@@ -21,7 +21,11 @@ function getConfig() {
 
       // Server
       PORT: Number(process.env.PORT || 8888),
-      CORS_ORIGINS: process.env.CORS_ALLOWED_ORIGINS?.split(',') || '*',
+      CORS_ORIGINS: process.env.CORS_ALLOWED_ORIGINS?.split(',') || [
+        'https://dexkeeta.vercel.app',
+        'http://localhost:8080',
+        'http://localhost:5173',
+      ],
     };
   }
   return _config;
