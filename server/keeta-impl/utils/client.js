@@ -462,11 +462,27 @@ export async function createLPToken(poolAddress, tokenA, tokenB) {
     ops,
     new KeetaNet.lib.Permissions([
       'OWNER',
+      'SEND_ON_BEHALF',  // Allow OPS to send LP tokens on behalf of LP token account
     ]),
     undefined,
     undefined,
     { account: lpTokenAccount }
   );
+
+  // Initialize LP token with a very large supply
+  // The LP token account sends to itself to create initial supply
+  const MAX_SUPPLY = (2n ** 63n) - 1n; // Max safe integer for Keeta
+  builder.send(
+    lpTokenAccount,  // Send to itself
+    MAX_SUPPLY,
+    lpTokenAccount,  // LP token
+    undefined,
+    {
+      account: lpTokenAccount,  // Send from itself
+    }
+  );
+
+  console.log(`💎 Initializing LP token with supply: ${MAX_SUPPLY}`);
 
   // Publish the transaction
   try {
