@@ -16,16 +16,28 @@ import Header from "./components/layout/Header";
 import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "./wallet/config";
 import { NetworkProvider, useNetwork } from "./contexts/NetworkContext";
-import KeetaDex from "./components/keeta/KeetaDex";
+import { KeetaWalletProvider } from "./contexts/KeetaWalletContext";
+import KeetaIndex from "./pages/keeta/Index";
+import KeetaPool from "./pages/keeta/Pool";
+import KeetaPortfolio from "./pages/keeta/Portfolio";
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
   const { network } = useNetwork();
 
-  // When Keeta network is selected, show the Keeta DEX
+  // When Keeta network is selected, show the Keeta DEX with router-based pages
   if (network === "Keeta") {
-    return <KeetaDex />;
+    return (
+      <KeetaWalletProvider>
+        <Routes>
+          <Route path="/" element={<KeetaIndex />} />
+          <Route path="/pool" element={<KeetaPool />} />
+          <Route path="/portfolio" element={<KeetaPortfolio />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </KeetaWalletProvider>
+    );
   }
 
   // Otherwise show the Base DEX routes
