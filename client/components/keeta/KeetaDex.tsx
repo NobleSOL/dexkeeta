@@ -1576,10 +1576,11 @@ export default function KeetaDex() {
         console.log('🔥 Executing Keythings remove liquidity (two-transaction flow)...');
 
         // Import utilities
-        const { toAtomic } = await import('@/lib/keeta-swap-math');
+        console.log('📦 Importing Keythings provider...');
         const { getKeythingsProvider } = await import('@/lib/keythings-provider');
 
         // Get Keythings user client for transaction signing
+        console.log('🔍 Getting Keythings provider instance...');
         const provider = getKeythingsProvider();
         if (!provider) {
           throw new Error('Keythings provider not found');
@@ -1748,9 +1749,10 @@ export default function KeetaDex() {
         }
       }
     } catch (error: any) {
+      console.error('❌ Remove liquidity error:', error);
       toast({
         title: "Remove Liquidity Failed",
-        description: error.message,
+        description: error.message || 'Unknown error occurred',
         variant: "destructive",
       });
     } finally {
