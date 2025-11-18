@@ -158,11 +158,9 @@ router.post('/complete', async (req, res) => {
 
     // Save LP position to database
     await poolManager.repository.saveLPPosition(
-      userAddress,
       poolAddress,
-      tokenA,
-      tokenB,
-      liquidity.toString()
+      userAddress,
+      liquidity
     );
 
     console.log('💾 Saved LP position to database');
