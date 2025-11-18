@@ -83,6 +83,7 @@ type KeetaPool = {
 type KeetaPosition = {
   poolAddress: string;
   lpStorageAddress?: string; // User's LP storage account (optional for backwards compat)
+  lpTokenAddress: string; // LP token address (required for Keythings remove liquidity)
   tokenA: string;
   tokenB: string;
   symbolA: string;
@@ -1570,23 +1571,123 @@ export default function KeetaDex() {
 
     setRemovingLiq(true);
     try {
-      console.log('🔥 Removing liquidity with client-side transaction signing...');
+      // Check if this is a Keythings wallet
+      if (wallet.isKeythings) {
+        console.log('🔥 Executing Keythings remove liquidity (two-transaction flow)...');
 
-      // Execute remove liquidity using client-side implementation
-      const result = await removeLiquidityClient(
-        wallet.seed,
-        position.poolAddress,
-        position.tokenA,
-        position.tokenB,
-        removeLiqPercent,
-        position.liquidity,
-        wallet.accountIndex || 0
-      );
+        // Import utilities
+        const { toAtomic } = await import('@/lib/keeta-swap-math');
+        const { getKeythingsProvider } = await import('@/lib/keythings-provider');
 
-      if (result.success) {
-        // Build explorer link
-        const explorerUrl = result.blockHash
-          ? `https://explorer.test.keeta.com/block/${result.blockHash}`
+        // Get Keythings user client for transaction signing
+        const provider = getKeythingsProvider();
+        if (!provider) {
+          throw new Error('Keythings provider not found');
+        }
+
+        console.log('🔐 Requesting user client from Keythings...');
+        const userClient = await provider.getUserClient();
+
+        // Helper function to fetch token decimals from Keeta RPC
+        async function fetchTokenDecimals(tokenAddress: string): Promise<number> {
+          const response = await fetch('https://api.test.keeta.com/rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'getAccountsInfo',
+              params: { accounts: [tokenAddress] }
+            })
+          });
+          const data = await response.json();
+          const tokenInfo = data.result?.accounts?.[tokenAddress];
+          if (!tokenInfo?.info?.metadata) {
+            throw new Error(`Could not fetch metadata for token ${tokenAddress}`);
+          }
+          // Decode base64 metadata (browser-compatible)
+          const metadataJson = atob(tokenInfo.info.metadata);
+          const metadata = JSON.parse(metadataJson);
+          return metadata.decimals || 9; // Default to 9 if not specified
+        }
+
+        // Fetch actual decimals for LP token
+        console.log('🔍 Fetching LP token decimals...');
+        const lpDecimals = await fetchTokenDecimals(position.lpTokenAddress);
+        console.log(`  LP token decimals: ${lpDecimals}`);
+
+        // Calculate LP amount to burn based on percentage
+        const lpTotalAmount = BigInt(position.liquidity);
+        const lpAmountToBurn = (lpTotalAmount * BigInt(removeLiqPercent)) / 100n;
+
+        console.log('💎 LP amount to burn:', {
+          total: lpTotalAmount.toString(),
+          percent: removeLiqPercent,
+          toBurn: lpAmountToBurn.toString(),
+        });
+
+        // Import KeetaNet for account creation
+        const KeetaNet = await import('@keetanetwork/keetanet-client');
+        const lpTokenAccount = KeetaNet.lib.Account.fromPublicKeyString(position.lpTokenAddress);
+
+        // Build TX1: User sends LP tokens to pool for burning
+        console.log('📝 Building TX1 (user sends LP tokens to pool)...');
+        const tx1Builder = userClient.initBuilder();
+
+        // Send LP tokens to pool account (will be burned by backend)
+        tx1Builder.send(position.poolAddress, lpAmountToBurn, lpTokenAccount);
+
+        // Publish TX1 (will prompt user via Keythings UI)
+        console.log('✍️ Prompting user to sign TX1 via Keythings...');
+        await userClient.publishBuilder(tx1Builder);
+
+        // Extract TX1 block hash for logging
+        let tx1Hash = null;
+        if (tx1Builder.blocks && tx1Builder.blocks.length > 0) {
+          const block = tx1Builder.blocks[0];
+          if (block && block.hash) {
+            if (typeof block.hash === 'string') {
+              tx1Hash = block.hash.toUpperCase();
+            } else if (block.hash.toString) {
+              const hashStr = block.hash.toString();
+              if (hashStr.match(/^[0-9A-Fa-f]+$/)) {
+                tx1Hash = hashStr.toUpperCase();
+              } else if (block.hash.toString('hex')) {
+                tx1Hash = block.hash.toString('hex').toUpperCase();
+              }
+            }
+          }
+        }
+
+        console.log(`✅ TX1 completed: ${tx1Hash || 'no hash'}`);
+
+        // Call backend to execute TX2 (burn LP tokens and return tokenA + tokenB to user)
+        console.log('📝 Calling backend to execute TX2 (burn LP and return tokens)...');
+        const tx2Response = await fetch(`${API_BASE}/liquidity/keythings/remove-complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userAddress: wallet.address,
+            poolAddress: position.poolAddress,
+            lpTokenAddress: position.lpTokenAddress,
+            lpAmount: lpAmountToBurn.toString(),
+            amountAMin: '0', // TODO: Add slippage protection
+            amountBMin: '0',
+          }),
+        });
+
+        const tx2Result = await tx2Response.json();
+
+        if (!tx2Result.success) {
+          throw new Error(tx2Result.error || 'TX2 failed');
+        }
+
+        console.log(`✅ TX2 completed: ${tx2Result.result?.blockHash || 'no hash'}`);
+
+        // Build explorer link (use TX2 hash if available, otherwise TX1)
+        const blockHash = tx2Result.result?.blockHash || tx1Hash;
+        const explorerUrl = blockHash
+          ? `https://explorer.test.keeta.com/block/${blockHash}`
           : `https://explorer.test.keeta.com/account/${wallet.address}`;
 
         toast({
@@ -1595,7 +1696,7 @@ export default function KeetaDex() {
             <div className="space-y-1">
               <div>Removed {removeLiqPercent}% of your liquidity</div>
               <div className="text-sm text-muted-foreground">
-                Received {result.amountA} {position.symbolA} and {result.amountB} {position.symbolB}
+                Received {tx2Result.result.amountA} {position.symbolA} and {tx2Result.result.amountB} {position.symbolB}
               </div>
               <a
                 href={explorerUrl}
@@ -1620,7 +1721,59 @@ export default function KeetaDex() {
         await loadPools();
         await fetchPositions();
       } else {
-        throw new Error(result.error || "Failed to remove liquidity");
+        // Regular wallet: use seed-based client
+        console.log('🔥 Removing liquidity with client-side transaction signing...');
+
+        // Execute remove liquidity using client-side implementation
+        const result = await removeLiquidityClient(
+          wallet.seed,
+          position.poolAddress,
+          position.tokenA,
+          position.tokenB,
+          removeLiqPercent,
+          position.liquidity,
+          wallet.accountIndex || 0
+        );
+
+        if (result.success) {
+          // Build explorer link
+          const explorerUrl = result.blockHash
+            ? `https://explorer.test.keeta.com/block/${result.blockHash}`
+            : `https://explorer.test.keeta.com/account/${wallet.address}`;
+
+          toast({
+            title: "Liquidity Removed!",
+            description: (
+              <div className="space-y-1">
+                <div>Removed {removeLiqPercent}% of your liquidity</div>
+                <div className="text-sm text-muted-foreground">
+                  Received {result.amountA} {position.symbolA} and {result.amountB} {position.symbolB}
+                </div>
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sky-400 hover:text-sky-300 underline text-sm flex items-center gap-1"
+                >
+                  View on Keeta Explorer
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
+            ),
+          });
+
+          // Wait for blockchain to sync before refreshing
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // Refresh data
+          await refreshBalances();
+          await loadPools();
+          await fetchPositions();
+        } else {
+          throw new Error(result.error || "Failed to remove liquidity");
+        }
       }
     } catch (error: any) {
       toast({

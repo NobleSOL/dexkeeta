@@ -212,4 +212,167 @@ function sqrt(value) {
   return newtonIteration(value, 1n);
 }
 
+/**
+ * POST /api/liquidity/keythings/remove-complete
+ * Complete a Keythings wallet remove liquidity by burning LP tokens and returning tokens to user
+ *
+ * Flow:
+ * 1. User already sent TX1 via Keythings (LP tokens → pool for burning)
+ * 2. This endpoint executes TX2: burn LP tokens and send tokenA + tokenB to user using OPS account
+ *
+ * Body: {
+ *   userAddress: string,
+ *   poolAddress: string,
+ *   lpTokenAddress: string,
+ *   lpAmount: string (atomic units as string),
+ *   amountAMin: string (atomic units as string),
+ *   amountBMin: string (atomic units as string)
+ * }
+ */
+router.post('/remove-complete', async (req, res) => {
+  try {
+    console.log('🔥 Keythings remove liquidity /remove-complete endpoint called');
+    console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
+
+    const { userAddress, poolAddress, lpTokenAddress, lpAmount, amountAMin, amountBMin } = req.body;
+
+    if (!userAddress || !poolAddress || !lpTokenAddress || !lpAmount) {
+      console.error('❌ Missing required fields!');
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: userAddress, poolAddress, lpTokenAddress, lpAmount',
+        received: req.body,
+      });
+    }
+
+    console.log('✅ All required fields present');
+    console.log(`   User: ${userAddress.slice(0, 12)}...`);
+    console.log(`   Pool: ${poolAddress.slice(0, 12)}...`);
+    console.log(`   LP Token: ${lpTokenAddress.slice(0, 12)}...`);
+    console.log(`   LP Amount: ${lpAmount}`);
+
+    const opsClient = await getOpsClient();
+    const poolManager = await getPoolManager();
+
+    // Find the pool instance
+    const pool = Array.from(poolManager.pools.values()).find(
+      (p) => p.poolAddress === poolAddress
+    );
+
+    if (!pool) {
+      throw new Error(`Pool not found: ${poolAddress}`);
+    }
+
+    // Update reserves to get current state
+    await pool.updateReserves();
+    const reserveA = pool.reserveA;
+    const reserveB = pool.reserveB;
+
+    // Get total LP supply
+    let totalSupply = 0n;
+    try {
+      const lpTokenAccountInfo = await opsClient.client.getAccountsInfo([lpTokenAddress]);
+      const lpTokenInfo = lpTokenAccountInfo[lpTokenAddress];
+
+      if (lpTokenInfo?.info?.supply) {
+        totalSupply = BigInt(lpTokenInfo.info.supply);
+      }
+    } catch (err) {
+      throw new Error(`Could not fetch LP token supply: ${err.message}`);
+    }
+
+    console.log('📊 Current pool state:', {
+      reserveA: reserveA.toString(),
+      reserveB: reserveB.toString(),
+      totalSupply: totalSupply.toString(),
+    });
+
+    // Calculate amounts to return
+    const lpAmountBigInt = BigInt(lpAmount);
+    const amountA = (lpAmountBigInt * reserveA) / totalSupply;
+    const amountB = (lpAmountBigInt * reserveB) / totalSupply;
+
+    console.log(`💎 Tokens to return: ${amountA} tokenA + ${amountB} tokenB`);
+
+    // Check minimum amounts
+    const amountAMinBigInt = amountAMin ? BigInt(amountAMin) : 0n;
+    const amountBMinBigInt = amountBMin ? BigInt(amountBMin) : 0n;
+
+    if (amountA < amountAMinBigInt) {
+      throw new Error(`Insufficient tokenA: got ${amountA}, minimum ${amountAMinBigInt}`);
+    }
+    if (amountB < amountBMinBigInt) {
+      throw new Error(`Insufficient tokenB: got ${amountB}, minimum ${amountBMinBigInt}`);
+    }
+
+    // TX2: Burn LP tokens and return tokens to user
+    console.log('📝 TX2: Burning LP tokens and returning tokens to user...');
+
+    // Import KeetaNet for account creation
+    const KeetaNet = await import('@keetanetwork/keetanet-client');
+    const lpTokenAccount = KeetaNet.lib.Account.fromPublicKeyString(lpTokenAddress);
+    const poolAccount = KeetaNet.lib.Account.fromPublicKeyString(poolAddress);
+    const userAccount = KeetaNet.lib.Account.fromPublicKeyString(userAddress);
+    const tokenAAccount = KeetaNet.lib.Account.fromPublicKeyString(pool.tokenA);
+    const tokenBAccount = KeetaNet.lib.Account.fromPublicKeyString(pool.tokenB);
+
+    // Burn the LP tokens by reducing supply using modifyTokenSupply with negative amount
+    const burnBuilder = opsClient.initBuilder();
+    burnBuilder.modifyTokenSupply(-lpAmountBigInt, { account: lpTokenAccount });
+    await opsClient.publishBuilder(burnBuilder);
+    console.log(`🔥 Burned ${lpAmountBigInt} LP tokens`);
+
+    // Send tokenA and tokenB from pool to user
+    const sendBuilder = opsClient.initBuilder();
+
+    // Send tokenA from pool to user
+    sendBuilder.send(
+      userAccount,
+      amountA,
+      tokenAAccount,
+      undefined,
+      { account: poolAccount }
+    );
+
+    // Send tokenB from pool to user
+    sendBuilder.send(
+      userAccount,
+      amountB,
+      tokenBAccount,
+      undefined,
+      { account: poolAccount }
+    );
+
+    await opsClient.publishBuilder(sendBuilder);
+
+    console.log(`✅ TX2 completed: returned ${amountA} tokenA + ${amountB} tokenB to user`);
+
+    // Update pool reserves and total supply (in-memory only, blockchain is source of truth)
+    pool.reserveA = reserveA - amountA;
+    pool.reserveB = reserveB - amountB;
+    pool.totalSupply = totalSupply - lpAmountBigInt;
+
+    // Get decimals for human-readable response
+    const decimalsA = await fetchTokenDecimals(pool.tokenA);
+    const decimalsB = await fetchTokenDecimals(pool.tokenB);
+
+    res.json({
+      success: true,
+      result: {
+        amountA: (Number(amountA) / Math.pow(10, decimalsA)).toString(),
+        amountB: (Number(amountB) / Math.pow(10, decimalsB)).toString(),
+        lpBurned: lpAmount,
+        newReserveA: (Number(pool.reserveA) / Math.pow(10, decimalsA)).toString(),
+        newReserveB: (Number(pool.reserveB) / Math.pow(10, decimalsB)).toString(),
+      },
+    });
+  } catch (error) {
+    console.error('❌ Keythings remove liquidity completion error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;
