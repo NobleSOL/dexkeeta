@@ -1603,12 +1603,12 @@ export default function KeetaDex() {
         const KeetaNet = await import('@keetanetwork/keetanet-client');
         const lpTokenAccount = KeetaNet.lib.Account.fromPublicKeyString(position.lpTokenAddress);
 
-        // Build TX1: User sends LP tokens to pool for burning
-        console.log('📝 Building TX1 (user sends LP tokens to pool)...');
+        // Build TX1: User sends LP tokens to LP token account for burning
+        console.log('📝 Building TX1 (user sends LP tokens to LP token account)...');
         const tx1Builder = userClient.initBuilder();
 
-        // Send LP tokens to pool account (will be burned by backend)
-        tx1Builder.send(position.poolAddress, lpAmountToBurn, lpTokenAccount);
+        // Send LP tokens to LP token account (backend will burn them from there)
+        tx1Builder.send(position.lpTokenAddress, lpAmountToBurn, lpTokenAccount);
 
         // Publish TX1 (will prompt user via Keythings UI)
         console.log('✍️ Prompting user to sign TX1 via Keythings...');
