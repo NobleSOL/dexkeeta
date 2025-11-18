@@ -449,6 +449,7 @@ export async function createLPToken(poolAddress, tokenA, tokenB) {
     {
       name: `${symbolA}_${symbolB}_LP`,
       description: 'Silverback Liquidity Token',
+      decimals: 9,
       metadata: metadataBase64,
       defaultPermission: new KeetaNet.lib.Permissions([
         'ACCESS',
