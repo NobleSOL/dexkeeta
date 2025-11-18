@@ -710,6 +710,7 @@ export class PoolManager {
 
           positions.push({
             poolAddress: pool.poolAddress,
+            lpTokenAddress: tokenAddr, // LP token address needed for remove liquidity
             tokenA: pool.tokenA,
             tokenB: pool.tokenB,
             symbolA,
