@@ -12,6 +12,7 @@ import liquidityRoutes from './routes/liquidity.js';
 import poolsRoutes from './routes/pools.js';
 import transactionsRoutes from './routes/transactions.js';
 import walletRoutes from './routes/wallet.js';
+import chartsRoutes from './routes/charts.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -84,6 +85,7 @@ app.use('/api/swap', swapRoutes);
 app.use('/api/liquidity', liquidityRoutes);
 app.use('/api/pools', poolsRoutes);
 app.use('/api/transactions', transactionsRoutes);
+app.use('/api/charts', chartsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

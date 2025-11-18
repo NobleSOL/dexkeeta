@@ -1,20 +1,26 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Wallet,
-  Droplets,
   Copy,
   CheckCircle2,
   Send,
   TrendingUp,
+  BarChart3,
 } from "lucide-react";
 import { useKeetaWallet } from "@/contexts/KeetaWalletContext";
+import PriceChart from "@/components/charts/PriceChart";
+
+interface PriceDataPoint {
+  time: number;
+  value: number;
+}
 
 export default function KeetaPortfolio() {
   const {
     wallet,
-    positions,
+    pools,
     showAllTokens,
     setShowAllTokens,
     copiedAddress,
@@ -27,6 +33,45 @@ export default function KeetaPortfolio() {
     setSendAmount,
     setSendDialogOpen,
   } = useKeetaWallet();
+
+  const [selectedPool, setSelectedPool] = useState<string>("");
+  const [chartData, setChartData] = useState<PriceDataPoint[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Auto-select first pool on mount
+  useEffect(() => {
+    if (pools.length > 0 && !selectedPool) {
+      setSelectedPool(pools[0].poolAddress);
+    }
+  }, [pools]);
+
+  // Fetch chart data when pool selection changes
+  useEffect(() => {
+    if (!selectedPool) return;
+
+    const fetchChartData = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/charts/price/${selectedPool}?limit=100`);
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          setChartData(result.data);
+        } else {
+          setChartData([]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch chart data:', error);
+        setChartData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChartData();
+  }, [selectedPool]);
+
+  const selectedPoolInfo = pools.find(p => p.poolAddress === selectedPool);
 
   if (!wallet) {
     return (
@@ -174,72 +219,61 @@ export default function KeetaPortfolio() {
             </Card>
           </div>
 
-          {/* Right Column - Liquidity Positions */}
+          {/* Right Column - Price Charts */}
           <div className="lg:col-span-7">
             <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
               <CardHeader>
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-sky-400" />
-                  <CardTitle>Your Liquidity Positions</CardTitle>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-sky-400" />
+                    <CardTitle>Token Price Charts</CardTitle>
+                  </div>
                 </div>
-                <CardDescription>View and manage your LP positions</CardDescription>
+                <CardDescription>Historical price data from pool reserves</CardDescription>
               </CardHeader>
               <CardContent>
-                {positions.length === 0 ? (
+                {pools.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
-                    <Droplets className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg mb-2">No liquidity positions yet</p>
-                    <p className="text-sm">Add liquidity to a pool to start earning fees</p>
+                    <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg mb-2">No pools available</p>
+                    <p className="text-sm">Create a pool to see price charts</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {positions.map((position) => (
-                      <div
-                        key={position.poolAddress}
-                        className="rounded-xl border border-border/40 bg-gradient-to-br from-secondary/40 to-secondary/20 p-6 transition-all hover:border-brand/40 hover:shadow-lg hover:shadow-brand/5"
-                      >
-                        <div className="flex items-start justify-between mb-4">
-                          <div>
-                            <h3 className="text-lg font-semibold mb-1">
-                              {position.symbolA} / {position.symbolB}
-                            </h3>
-                            <code className="text-xs text-muted-foreground">
-                              {position.poolAddress.slice(0, 12)}...{position.poolAddress.slice(-8)}
-                            </code>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm text-muted-foreground">Share of Pool</div>
-                            <div className="text-lg font-bold text-brand">
-                              {position.sharePercent.toFixed(4)}%
-                            </div>
-                          </div>
-                        </div>
+                  <div className="space-y-6">
+                    {/* Pool Selector */}
+                    <div className="flex flex-wrap gap-2">
+                      {pools.map((pool) => (
+                        <button
+                          key={pool.poolAddress}
+                          onClick={() => setSelectedPool(pool.poolAddress)}
+                          className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                            selectedPool === pool.poolAddress
+                              ? 'bg-brand text-white shadow-lg'
+                              : 'bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground'
+                          }`}
+                        >
+                          {pool.symbolA} / {pool.symbolB}
+                        </button>
+                      ))}
+                    </div>
 
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                          <div className="rounded-lg bg-card/60 p-3">
-                            <div className="text-xs text-muted-foreground mb-1">{position.symbolA}</div>
-                            <div className="text-base font-semibold">{position.amountA}</div>
-                          </div>
-                          <div className="rounded-lg bg-card/60 p-3">
-                            <div className="text-xs text-muted-foreground mb-1">{position.symbolB}</div>
-                            <div className="text-base font-semibold">{position.amountB}</div>
-                          </div>
-                        </div>
-
-                        <div className="rounded-lg bg-secondary/40 p-3">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">LP Tokens</span>
-                            <span className="text-sm font-mono">{position.liquidity}</span>
-                          </div>
-                        </div>
-
-                        {position.timestamp && (
-                          <div className="mt-3 text-xs text-muted-foreground">
-                            Added on {new Date(position.timestamp).toLocaleDateString()}
-                          </div>
-                        )}
+                    {/* Chart Display */}
+                    {loading ? (
+                      <div className="flex items-center justify-center py-20">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand"></div>
                       </div>
-                    ))}
+                    ) : chartData.length > 0 ? (
+                      <PriceChart
+                        data={chartData}
+                        tokenSymbol={selectedPoolInfo ? `${selectedPoolInfo.symbolA}/${selectedPoolInfo.symbolB}` : ''}
+                      />
+                    ) : (
+                      <div className="text-center py-20 text-muted-foreground">
+                        <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p className="text-lg mb-2">No price data available</p>
+                        <p className="text-sm">Price history will appear as the pool records snapshots</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>

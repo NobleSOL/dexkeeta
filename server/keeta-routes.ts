@@ -13,6 +13,7 @@ import transactionsRouter from './keeta-impl/routes/transactions.js';
 import adminRouter from './keeta-impl/routes/admin.js';
 import pricingRouter from './keeta-impl/routes/pricing.js';
 import transferRouter from './keeta-impl/routes/transfer.js';
+import chartsRouter from './keeta-impl/routes/charts.js';
 
 const router = Router();
 
@@ -27,5 +28,6 @@ router.use('/api/transactions', transactionsRouter);
 router.use('/api/admin', adminRouter);
 router.use('/api/pricing', pricingRouter);
 router.use('/api/transfer', transferRouter);
+router.use('/api/charts', chartsRouter);
 
 export default router;
