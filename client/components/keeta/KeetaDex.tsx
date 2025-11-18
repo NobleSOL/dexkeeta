@@ -738,10 +738,28 @@ export default function KeetaDex() {
     if (!wallet) return;
 
     try {
-      console.log('📋 Fetching positions client-side...');
-      const userPositions = await fetchLiquidityPositions(wallet.seed, wallet.accountIndex || 0);
+      let userPositions;
+
+      if (wallet.isKeythings) {
+        // Keythings wallet: Fetch positions from backend API (blockchain-first)
+        console.log('📋 Fetching Keythings wallet positions from backend...');
+        const response = await fetch(`${API_BASE}/api/liquidity/positions/${wallet.address}`);
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch positions');
+        }
+
+        userPositions = data.positions || [];
+        console.log('✅ Keythings positions loaded from backend:', userPositions);
+      } else {
+        // Seed wallet: Fetch positions client-side
+        console.log('📋 Fetching seed wallet positions client-side...');
+        userPositions = await fetchLiquidityPositions(wallet.seed, wallet.accountIndex || 0);
+        console.log('✅ Seed wallet positions loaded:', userPositions);
+      }
+
       setPositions(userPositions);
-      console.log('✅ Positions loaded:', userPositions);
     } catch (error) {
       console.error("Failed to fetch positions:", error);
       setPositions([]);
