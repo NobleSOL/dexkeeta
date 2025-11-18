@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +14,7 @@ import {
   Send,
 } from "lucide-react";
 import { KeetaPoolCard, KeetaPoolCardData } from "@/components/keeta/KeetaPoolCard";
+import { PoolDashboard } from "@/components/pool/PoolDashboard";
 import { useKeetaWallet } from "@/contexts/KeetaWalletContext";
 import {
   addLiquidity as addLiquidityClient,
@@ -60,6 +61,52 @@ export default function KeetaPool() {
   // Remove liquidity state
   const [removeLiqPercent, setRemoveLiqPercent] = useState(100);
   const [removingLiq, setRemovingLiq] = useState(false);
+
+  // Calculate dashboard stats from pools data
+  const dashboardStats = useMemo(() => {
+    if (allPools.length === 0) {
+      return {
+        totalTVL: "-",
+        totalPools: 0,
+        totalVolume24h: "-",
+        avgAPY: "-",
+      };
+    }
+
+    // Calculate total TVL (sum of all reserves with token prices if available)
+    let totalTVL = 0;
+    let hasPriceData = false;
+
+    allPools.forEach((pool) => {
+      const reserveA = pool.reserveAHuman || 0;
+      const reserveB = pool.reserveBHuman || 0;
+
+      // Try to get USD price from tokenPrices
+      const priceA = tokenPrices?.[pool.tokenA]?.priceUsd;
+      const priceB = tokenPrices?.[pool.tokenB]?.priceUsd;
+
+      if (priceA) {
+        totalTVL += reserveA * priceA;
+        hasPriceData = true;
+      }
+      if (priceB) {
+        totalTVL += reserveB * priceB;
+        hasPriceData = true;
+      }
+    });
+
+    // Calculate average APY (assumes 10% of TVL trades daily, 0.3% fee)
+    const assumedDailyVolumePercent = 0.1;
+    const feePercent = 0.003;
+    const avgAPY = (assumedDailyVolumePercent * feePercent * 365) * 100;
+
+    return {
+      totalTVL: hasPriceData ? `$${totalTVL.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-",
+      totalPools: allPools.length,
+      totalVolume24h: "-", // Would need historical trading data
+      avgAPY: avgAPY.toFixed(2),
+    };
+  }, [allPools, tokenPrices]);
 
   function toggleLiquidityTokens() {
     if (createMode) {
@@ -946,7 +993,15 @@ export default function KeetaPool() {
 
               {/* Pools Tab */}
               <TabsContent value="pools">
-                <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
+                {/* Dashboard Stats */}
+                <PoolDashboard
+                  totalTVL={dashboardStats.totalTVL}
+                  totalPools={dashboardStats.totalPools}
+                  totalVolume24h={dashboardStats.totalVolume24h}
+                  avgAPY={dashboardStats.avgAPY}
+                />
+
+                <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur mt-6">
                   <CardHeader>
                     <CardTitle>Liquidity Pools</CardTitle>
                     <CardDescription>View all pools and manage your positions</CardDescription>
