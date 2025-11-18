@@ -2,6 +2,7 @@
 // Fetches data directly from Keeta network without backend
 
 import * as KeetaSDK from '@keetanetwork/keetanet-client';
+import { calculateSwapQuote as calculateSwapQuoteAMM } from './amm-math';
 
 const KEETA_NODE = 'https://api.test.keeta.com';
 const KEETA_NETWORK = 'test';
@@ -512,42 +513,44 @@ export async function fetchLiquidityPositions(seed: string, accountIndex: number
 /**
  * Get swap quote for a token pair using CLIENT-SIDE calculation
  * This eliminates the need for backend API calls, making quotes instant
+ * @param poolData - Pool data from context (avoid refetching)
  */
-export async function getSwapQuote(
+export function getSwapQuote(
   tokenIn: string,
   tokenOut: string,
   amountIn: string,
-  poolAddress: string
-): Promise<{
+  poolAddress: string,
+  poolData?: {
+    tokenA: string;
+    tokenB: string;
+    reserveA: string;
+    reserveB: string;
+    decimalsA: number;
+    decimalsB: number;
+  }
+): {
   amountOut: string;
   amountOutHuman: number;
   priceImpact: number;
   minimumReceived: string;
   feeAmount: string;
   feeAmountHuman: number;
-} | null> {
+} | null {
   try {
-    // Import client-side AMM math
-    const { calculateSwapQuote } = await import('./amm-math');
-
-    // Fetch pool reserves (from local cache)
-    const pools = await fetchPools();
-    const pool = pools.find(p => p.poolAddress === poolAddress);
-
-    if (!pool) {
-      console.error('Pool not found:', poolAddress);
+    if (!poolData) {
+      console.error('Pool data not provided');
       return null;
     }
 
     // Determine which token is A and which is B
-    const isAtoB = tokenIn === pool.tokenA;
-    const reserveIn = isAtoB ? pool.reserveA : pool.reserveB;
-    const reserveOut = isAtoB ? pool.reserveB : pool.reserveA;
-    const decimalsIn = isAtoB ? pool.decimalsA : pool.decimalsB;
-    const decimalsOut = isAtoB ? pool.decimalsB : pool.decimalsA;
+    const isAtoB = tokenIn === poolData.tokenA;
+    const reserveIn = isAtoB ? poolData.reserveA : poolData.reserveB;
+    const reserveOut = isAtoB ? poolData.reserveB : poolData.reserveA;
+    const decimalsIn = isAtoB ? poolData.decimalsA : poolData.decimalsB;
+    const decimalsOut = isAtoB ? poolData.decimalsB : poolData.decimalsA;
 
     // Calculate quote using client-side AMM math (instant, no API call!)
-    const quote = calculateSwapQuote(
+    const quote = calculateSwapQuoteAMM(
       amountIn,
       reserveIn,
       reserveOut,

@@ -83,7 +83,7 @@ export default function KeetaIndex() {
     // Note: In current design, we select pool not individual out token
   }
 
-  async function getSwapQuote() {
+  function getSwapQuote() {
     if (!selectedPoolForSwap || !swapTokenIn || !swapAmount || !wallet) return;
 
     try {
@@ -95,12 +95,20 @@ export default function KeetaIndex() {
       const tokenInSymbol = pool.tokenA === swapTokenIn ? pool.symbolA : pool.symbolB;
       const tokenOutSymbol = pool.tokenA === swapTokenIn ? pool.symbolB : pool.symbolA;
 
-      // Use client-side swap quote calculation
-      const quote = await getSwapQuoteClient(
+      // Use client-side swap quote calculation (synchronous, instant!)
+      const quote = getSwapQuoteClient(
         swapTokenIn,
         tokenOut,
         swapAmount,
-        selectedPoolForSwap
+        selectedPoolForSwap,
+        {
+          tokenA: pool.tokenA,
+          tokenB: pool.tokenB,
+          reserveA: pool.reserveA,
+          reserveB: pool.reserveB,
+          decimalsA: pool.decimalsA || 9,
+          decimalsB: pool.decimalsB || 9,
+        }
       );
 
       if (quote) {
@@ -123,7 +131,7 @@ export default function KeetaIndex() {
 
   useEffect(() => {
     if (swapAmount && selectedPoolForSwap && swapTokenIn) {
-      const timer = setTimeout(() => getSwapQuote(), 500);
+      const timer = setTimeout(() => getSwapQuote(), 200);
       return () => clearTimeout(timer);
     } else {
       setSwapQuote(null);
