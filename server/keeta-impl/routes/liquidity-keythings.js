@@ -2,7 +2,7 @@
 // Completes add liquidity after user has sent tokens via TX1 (signed in Keythings)
 import express from 'express';
 import { getPoolManager } from '../contracts/PoolManager.js';
-import { getOpsClient, accountFromAddress } from '../utils/client.js';
+import { getOpsClient, accountFromAddress, mintLPTokens } from '../utils/client.js';
 import { toAtomic } from '../utils/constants.js';
 import { fetchTokenDecimals } from '../utils/client.js';
 
@@ -144,44 +144,12 @@ router.post('/complete', async (req, res) => {
       }
     }
 
-    const userAccount = accountFromAddress(userAddress);
-    const poolAccount = accountFromAddress(poolAddress);
-    const lpTokenAccount = accountFromAddress(pool.lpTokenAddress);
+    // Use the mintLPTokens helper which:
+    // 1. modifyTokenSupply() to create new tokens
+    // 2. send() to transfer them to the user
+    await mintLPTokens(pool.lpTokenAddress, userAddress, liquidity);
 
-    const tx2Builder = opsClient.initBuilder();
-
-    // Mint LP tokens to user using SEND_ON_BEHALF (OPS acts on behalf of LP token)
-    tx2Builder.send(
-      userAccount,
-      liquidity,
-      lpTokenAccount,  // The token being sent is the LP token
-      undefined,
-      {
-        account: lpTokenAccount, // Send from LP token account (token sends itself)
-      }
-    );
-
-    await opsClient.publishBuilder(tx2Builder);
-
-    // Extract TX2 block hash
-    let tx2Hash = null;
-    if (tx2Builder.blocks && tx2Builder.blocks.length > 0) {
-      const block = tx2Builder.blocks[0];
-      if (block && block.hash) {
-        if (typeof block.hash === 'string') {
-          tx2Hash = block.hash.toUpperCase();
-        } else if (block.hash.toString) {
-          const hashStr = block.hash.toString();
-          if (hashStr.match(/^[0-9A-Fa-f]+$/)) {
-            tx2Hash = hashStr.toUpperCase();
-          } else if (block.hash.toString('hex')) {
-            tx2Hash = block.hash.toString('hex').toUpperCase();
-          }
-        }
-      }
-    }
-
-    console.log(`✅ TX2 completed: ${tx2Hash || 'no hash'}`);
+    console.log(`✅ TX2 completed: ${liquidity} LP tokens minted to user`);
 
     // Update pool reserves and total supply
     pool.reserveA = reserveA + amountABigInt;
@@ -206,7 +174,6 @@ router.post('/complete', async (req, res) => {
     res.json({
       success: true,
       result: {
-        blockHash: tx2Hash,
         liquidity: liquidity.toString(),
         amountA: (Number(amountA) / Math.pow(10, decimalsA)).toString(),
         amountB: (Number(amountB) / Math.pow(10, decimalsB)).toString(),
