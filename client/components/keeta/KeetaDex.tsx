@@ -743,7 +743,7 @@ export default function KeetaDex() {
       if (wallet.isKeythings) {
         // Keythings wallet: Fetch positions from backend API (blockchain-first)
         console.log('📋 Fetching Keythings wallet positions from backend...');
-        const response = await fetch(`${API_BASE}/api/liquidity/positions/${wallet.address}`);
+        const response = await fetch(`${API_BASE}/liquidity/positions/${wallet.address}`);
         const data = await response.json();
 
         if (!data.success) {
