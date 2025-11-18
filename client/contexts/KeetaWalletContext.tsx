@@ -75,6 +75,8 @@ interface KeetaWalletContextValue {
   loading: boolean;
   keythingsConnected: boolean;
   keythingsAddress: string | null;
+  keythingsAvailable: boolean;
+  keythingsChecking: boolean;
   showAllTokens: boolean;
   setShowAllTokens: (show: boolean) => void;
   copiedAddress: boolean;
@@ -136,6 +138,8 @@ export function KeetaWalletProvider({ children }: { children: React.ReactNode })
   // Keythings wallet state
   const [keythingsConnected, setKeythingsConnected] = useState(false);
   const [keythingsAddress, setKeythingsAddress] = useState<string | null>(null);
+  const [keythingsAvailable, setKeythingsAvailable] = useState(isKeythingsInstalled());
+  const [keythingsChecking, setKeythingsChecking] = useState(!isKeythingsInstalled());
 
   // Send tokens state
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
@@ -187,6 +191,36 @@ export function KeetaWalletProvider({ children }: { children: React.ReactNode })
       } catch (e) {
         console.error("Failed to load wallet:", e);
       }
+    }
+  }, []);
+
+  // Poll for Keythings extension availability
+  useEffect(() => {
+    let attempts = 0;
+    const maxAttempts = 10; // Poll for up to 5 seconds (10 attempts * 500ms)
+
+    const checkForKeythings = () => {
+      const installed = isKeythingsInstalled();
+
+      if (installed) {
+        console.log('✅ Keythings extension detected');
+        setKeythingsAvailable(true);
+        setKeythingsChecking(false);
+      } else {
+        attempts++;
+        if (attempts < maxAttempts) {
+          console.log(`🔍 Checking for Keythings extension... attempt ${attempts}/${maxAttempts}`);
+          setTimeout(checkForKeythings, 500);
+        } else {
+          console.log('⚠️ Keythings extension not detected after polling');
+          setKeythingsChecking(false);
+        }
+      }
+    };
+
+    // Only start polling if not already installed
+    if (!keythingsAvailable) {
+      checkForKeythings();
     }
   }, []);
 
@@ -799,6 +833,8 @@ export function KeetaWalletProvider({ children }: { children: React.ReactNode })
     loading,
     keythingsConnected,
     keythingsAddress,
+    keythingsAvailable,
+    keythingsChecking,
     showAllTokens,
     setShowAllTokens,
     copiedAddress,
