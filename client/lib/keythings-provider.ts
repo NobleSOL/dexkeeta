@@ -73,7 +73,11 @@ declare global {
  * Check if Keythings wallet is installed
  */
 export function isKeythingsInstalled(): boolean {
-  return typeof window !== 'undefined' && typeof window.keeta !== 'undefined' && window.keeta?.isKeeta === true;
+  // Check if window.keeta exists and has the requestAccounts method
+  // This is more reliable than checking isKeeta flag which might not be set
+  return typeof window !== 'undefined' &&
+         typeof window.keeta !== 'undefined' &&
+         typeof window.keeta.requestAccounts === 'function';
 }
 
 /**
