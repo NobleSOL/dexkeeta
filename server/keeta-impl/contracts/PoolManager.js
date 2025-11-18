@@ -674,7 +674,7 @@ export class PoolManager {
           // Get LP token total supply
           const lpTokenInfo = await client.client.getAccountsInfo([tokenAddr]);
           const lpData = lpTokenInfo[tokenAddr];
-          const totalShares = lpData?.balance ? BigInt(lpData.balance) : 0n;
+          const totalShares = lpData?.info?.supply ? BigInt(lpData.info.supply) : 0n;
 
           console.log(`     Total LP supply: ${totalShares}`);
 
