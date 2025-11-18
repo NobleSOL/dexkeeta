@@ -4,8 +4,15 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { base } from "viem/chains";
 import { useNetwork } from "@/contexts/NetworkContext";
-import { useKeetaWallet } from "@/contexts/KeetaWalletContext";
 import { toast } from "@/hooks/use-toast";
+import {
+  isKeythingsInstalled,
+  connectKeythings,
+  getSelectedAddress,
+  isConnected as isKeythingsConnected,
+  onAccountsChanged,
+  onDisconnect as onKeythingsDisconnect,
+} from "@/lib/keythings-provider";
 
 function truncate(addr?: string) {
   if (!addr) return "";
@@ -20,8 +27,37 @@ export default function ConnectButton() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
-  // Get Keythings wallet state from context
-  const { keythingsAddress, keythingsConnected, connectKeythingsWallet, disconnectWallet } = useKeetaWallet();
+  // Keythings wallet state (for Keeta network)
+  const [keythingsAddress, setKeythingsAddress] = useState<string | null>(null);
+  const [keythingsConnecting, setKeythingsConnecting] = useState(false);
+
+  // Check Keythings wallet connection state on mount and when switching to Keeta network
+  useEffect(() => {
+    if (network === "Keeta") {
+      if (isKeythingsInstalled() && isKeythingsConnected()) {
+        const address = getSelectedAddress();
+        setKeythingsAddress(address);
+      } else {
+        setKeythingsAddress(null);
+      }
+
+      // Listen for account changes
+      const handleAccountsChanged = (accounts: string[]) => {
+        if (accounts.length > 0) {
+          setKeythingsAddress(accounts[0]);
+        } else {
+          setKeythingsAddress(null);
+        }
+      };
+
+      const handleDisconnect = () => {
+        setKeythingsAddress(null);
+      };
+
+      onAccountsChanged(handleAccountsChanged);
+      onKeythingsDisconnect(handleDisconnect);
+    }
+  }, [network]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -32,9 +68,50 @@ export default function ConnectButton() {
     return () => document.removeEventListener("click", onDoc);
   }, [open]);
 
+  // Handle Keythings wallet connection
+  const handleKeythingsConnect = async () => {
+    if (!isKeythingsInstalled()) {
+      toast({
+        title: "Keythings Wallet Not Found",
+        description: "Please install the Keythings wallet extension to connect to Keeta network.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setKeythingsConnecting(true);
+    try {
+      const accounts = await connectKeythings();
+      if (accounts && accounts.length > 0) {
+        setKeythingsAddress(accounts[0]);
+        toast({
+          title: "Wallet Connected",
+          description: `Connected to ${truncate(accounts[0])}`,
+        });
+      }
+    } catch (error: any) {
+      console.error("Failed to connect Keythings wallet:", error);
+      toast({
+        title: "Connection Failed",
+        description: error.message || "Failed to connect to Keythings wallet",
+        variant: "destructive",
+      });
+    } finally {
+      setKeythingsConnecting(false);
+    }
+  };
+
+  const handleKeythingsDisconnect = () => {
+    setKeythingsAddress(null);
+    toast({
+      title: "Wallet Disconnected",
+      description: "Disconnected from Keythings wallet",
+    });
+  };
+
   // Keeta network - show Keythings wallet
   if (network === "Keeta") {
-    if (keythingsConnected && keythingsAddress) {
+    if (keythingsAddress) {
       return (
         <div className="relative" ref={ref}>
           <Button onClick={() => setOpen((o) => !o)}>
@@ -45,7 +122,7 @@ export default function ConnectButton() {
               <button
                 className="block w-full rounded-sm px-3 py-2 text-left text-sm hover:bg-accent"
                 onClick={() => {
-                  disconnectWallet();
+                  handleKeythingsDisconnect();
                   setOpen(false);
                 }}
               >
@@ -58,8 +135,8 @@ export default function ConnectButton() {
     }
 
     return (
-      <Button onClick={connectKeythingsWallet}>
-        Connect Wallet
+      <Button onClick={handleKeythingsConnect} disabled={keythingsConnecting}>
+        {keythingsConnecting ? "Connecting..." : "Connect Wallet"}
       </Button>
     );
   }

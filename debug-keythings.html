@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Keythings Debug</title>
+</head>
+<body>
+  <h1>Keythings Wallet Debug</h1>
+  <button onclick="checkKeythings()">Check Keythings</button>
+  <pre id="output"></pre>
+
+  <script>
+    function checkKeythings() {
+      const output = document.getElementById('output');
+      let result = 'Checking window.keeta...\n\n';
+
+      result += `window.keeta exists: ${typeof window.keeta !== 'undefined'}\n`;
+
+      if (typeof window.keeta !== 'undefined') {
+        result += `\nwindow.keeta properties:\n`;
+        result += `  - isKeeta: ${window.keeta.isKeeta}\n`;
+        result += `  - isAvailable: ${window.keeta.isAvailable}\n`;
+        result += `  - isConnected: ${window.keeta.isConnected}\n`;
+        result += `  - isLocked: ${window.keeta.isLocked}\n`;
+        result += `  - selectedAddress: ${window.keeta.selectedAddress}\n`;
+        result += `  - requestAccounts: ${typeof window.keeta.requestAccounts}\n`;
+        result += `  - getAccounts: ${typeof window.keeta.getAccounts}\n`;
+        result += `\nAll properties:\n`;
+        result += Object.keys(window.keeta).join(', ');
+      } else {
+        result += '\nwindow.keeta is NOT defined!\n';
+        result += 'The Keythings extension is either:\n';
+        result += '  1. Not installed\n';
+        result += '  2. Disabled\n';
+        result += '  3. Not injecting into this page\n';
+      }
+
+      output.textContent = result;
+    }
+
+    // Auto-check on page load
+    window.addEventListener('load', () => {
+      setTimeout(checkKeythings, 1000); // Wait 1 second for extension to inject
+    });
+  </script>
+</body>
+</html>
