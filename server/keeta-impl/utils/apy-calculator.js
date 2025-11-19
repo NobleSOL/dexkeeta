@@ -22,9 +22,11 @@ export class APYCalculator {
    * @param {bigint} currentReserveB - Current reserve B
    * @param {number} decimalsA - Token A decimals
    * @param {number} decimalsB - Token B decimals
+   * @param {string} tokenA - Token A address
+   * @param {string} tokenB - Token B address
    * @returns {Promise<{ apy: number, volume24h: number, tvl: number }>}
    */
-  async calculatePoolAPY(poolAddress, currentReserveA, currentReserveB, decimalsA, decimalsB) {
+  async calculatePoolAPY(poolAddress, currentReserveA, currentReserveB, decimalsA, decimalsB, tokenA, tokenB) {
     try {
       // Get snapshot from 24 hours ago
       const snapshot24h = await this.repository.getSnapshotAt(poolAddress, 24);
@@ -34,7 +36,7 @@ export class APYCalculator {
         return {
           apy: 0,
           volume24h: 0,
-          tvl: this.calculateTVL(currentReserveA, currentReserveB, decimalsA, decimalsB),
+          tvl: await this.calculateTVL(currentReserveA, currentReserveB, decimalsA, decimalsB, tokenA, tokenB),
           reason: 'No 24h snapshot available yet',
         };
       }
@@ -53,27 +55,30 @@ export class APYCalculator {
         return {
           apy: 0,
           volume24h: 0,
-          tvl: this.calculateTVL(currentReserveA, currentReserveB, decimalsA, decimalsB),
+          tvl: await this.calculateTVL(currentReserveA, currentReserveB, decimalsA, decimalsB, tokenA, tokenB),
           reason: 'No reserve growth in 24h',
         };
       }
 
-      // Derive trading volume from reserve growth
-      // LP fee is 0.25% (25 basis points), so: volume ≈ growth / 0.0025
-      const volume24h = Number(reserveAGrowth) / Math.pow(10, decimalsA) / 0.0025;
+      // Calculate TVL (Total Value Locked) in USD
+      const tvl = await this.calculateTVL(currentReserveA, currentReserveB, decimalsA, decimalsB, tokenA, tokenB);
 
-      // Calculate TVL (Total Value Locked) in token A terms
-      const tvl = this.calculateTVL(currentReserveA, currentReserveB, decimalsA, decimalsB);
+      // Get token A price for volume calculation
+      const { calculateTokenPrices } = await import('../routes/pricing.js');
+      const prices = await calculateTokenPrices([tokenA]);
+      const priceA = prices[tokenA]?.priceUsd || 0;
+
+      // Calculate volume in USD
+      // Reserve growth is the 0.25% LP fee that stayed in the pool
+      // So: growth = volume × 0.0025
+      // Therefore: volume = growth / 0.0025
+      const reserveAGrowthNum = Number(reserveAGrowth) / Math.pow(10, decimalsA);
+      const volume24hTokens = reserveAGrowthNum / 0.0025; // Volume in token A
+      const volume24h = volume24hTokens * priceA; // Volume in USD
 
       // Calculate APY
-      // Total fees = volume × 0.3% (0.25% LP + 0.05% protocol, but LPs only get 0.25%)
-      // Actually, the 0.25% already stayed in reserves, so we use total fee 0.3%
-      // APY = (daily_fees × 365) / TVL × 100
-      // But since growth already reflects the 0.25% that stayed, we need to extrapolate total volume
-      // Total volume = growth / 0.0025
-      // Total fees to LPs = volume × 0.0025 (this is what we already have as growth!)
-      // Annual fees = daily_fees × 365
-      const dailyFees = Number(reserveAGrowth) / Math.pow(10, decimalsA);
+      // Daily fees to LPs (0.25% of volume, which is what stayed in reserves as growth)
+      const dailyFees = reserveAGrowthNum * priceA; // Growth in USD
       const annualFees = dailyFees * 365;
       const apy = tvl > 0 ? (annualFees / tvl) * 100 : 0;
 
@@ -88,25 +93,55 @@ export class APYCalculator {
       return {
         apy: 0,
         volume24h: 0,
-        tvl: this.calculateTVL(currentReserveA, currentReserveB, decimalsA, decimalsB),
+        tvl: await this.calculateTVL(currentReserveA, currentReserveB, decimalsA, decimalsB, tokenA, tokenB),
         error: error.message,
       };
     }
   }
 
   /**
-   * Calculate TVL (Total Value Locked) in token A terms
-   * Simple calculation: reserve A × 2
+   * Calculate TVL (Total Value Locked) in USD
+   * Fetches token prices from pricing API and converts both reserves to USD
    *
-   * For more accurate TVL in USD, would need token prices
+   * @param {bigint} reserveA - Reserve of token A
+   * @param {bigint} reserveB - Reserve of token B
+   * @param {number} decimalsA - Token A decimals
+   * @param {number} decimalsB - Token B decimals
+   * @param {string} tokenA - Token A address
+   * @param {string} tokenB - Token B address
+   * @returns {Promise<number>} - TVL in USD
    */
-  calculateTVL(reserveA, reserveB, decimalsA, decimalsB) {
-    const reserveANum = Number(reserveA) / Math.pow(10, decimalsA);
-    const reserveBNum = Number(reserveB) / Math.pow(10, decimalsB);
+  async calculateTVL(reserveA, reserveB, decimalsA, decimalsB, tokenA, tokenB) {
+    try {
+      // Import pricing calculator
+      const { default: pricingRouter } = await import('../routes/pricing.js');
 
-    // For now, just return reserves in token A terms (doubled to represent both sides)
-    // In a real implementation, you'd convert to USD using price feeds
-    return reserveANum * 2;
+      // Fetch prices for both tokens (internal call)
+      const { calculateTokenPrices } = await import('../routes/pricing.js');
+      const prices = await calculateTokenPrices([tokenA, tokenB]);
+
+      // Convert reserves to human-readable amounts
+      const reserveANum = Number(reserveA) / Math.pow(10, decimalsA);
+      const reserveBNum = Number(reserveB) / Math.pow(10, decimalsB);
+
+      // Calculate USD value for each side
+      const priceA = prices[tokenA]?.priceUsd || 0;
+      const priceB = prices[tokenB]?.priceUsd || 0;
+
+      const valueA = reserveANum * priceA;
+      const valueB = reserveBNum * priceB;
+
+      // TVL is sum of both sides
+      const tvl = valueA + valueB;
+
+      return tvl;
+    } catch (error) {
+      console.warn('Failed to calculate TVL in USD, using fallback:', error.message);
+
+      // Fallback: estimate using reserve A × 2 (assumes equal value pools)
+      const reserveANum = Number(reserveA) / Math.pow(10, decimalsA);
+      return reserveANum * 2;
+    }
   }
 
   /**
@@ -136,7 +171,7 @@ export class APYCalculator {
 /**
  * Standalone function to calculate pool APY
  */
-export async function calculatePoolAPY(poolAddress, currentReserveA, currentReserveB, decimalsA, decimalsB) {
+export async function calculatePoolAPY(poolAddress, currentReserveA, currentReserveB, decimalsA, decimalsB, tokenA, tokenB) {
   const calculator = new APYCalculator();
-  return await calculator.calculatePoolAPY(poolAddress, currentReserveA, currentReserveB, decimalsA, decimalsB);
+  return await calculator.calculatePoolAPY(poolAddress, currentReserveA, currentReserveB, decimalsA, decimalsB, tokenA, tokenB);
 }

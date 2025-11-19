@@ -750,23 +750,33 @@ export class PoolManager {
    */
   async getPoolStats(tokenA, tokenB) {
     const pool = this.getPool(tokenA, tokenB);
-    
+
     if (!pool) {
       throw new Error(`No pool found for ${tokenA} / ${tokenB}`);
     }
-    
+
     const info = await pool.getPoolInfo();
-    
-    // Calculate TVL (in BASE token equivalent)
-    // For simplicity, assume tokenA is BASE
-    const tvlInBase = info.reserveAHuman * 2; // Rough estimate
-    
+
+    // Calculate TVL, APY, and Volume using APYCalculator
+    const { APYCalculator } = await import('../utils/apy-calculator.js');
+    const apyCalculator = new APYCalculator();
+    const apyData = await apyCalculator.calculatePoolAPY(
+      pool.poolAddress,
+      pool.reserveA,
+      pool.reserveB,
+      pool.decimalsA,
+      pool.decimalsB,
+      pool.tokenA,
+      pool.tokenB
+    );
+
     return {
       ...info,
-      tvl: tvlInBase,
-      volume24h: 0, // TODO: Track volume
-      fees24h: 0, // TODO: Track fees
-      lpHolders: 0, // TODO: Track total LP holders count
+      tvl: apyData.tvl,
+      volume24h: apyData.volume24h,
+      apy: apyData.apy,
+      fees24h: apyData.volume24h * 0.003, // 0.3% total fees
+      lpHolders: 0, // TODO: Track total LP holders count from LP token
     };
   }
 }

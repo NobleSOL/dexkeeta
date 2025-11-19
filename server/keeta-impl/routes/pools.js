@@ -24,7 +24,9 @@ router.get('/', async (req, res) => {
           BigInt(pool.reserveA),
           BigInt(pool.reserveB),
           pool.decimalsA,
-          pool.decimalsB
+          pool.decimalsB,
+          pool.tokenA,
+          pool.tokenB
         );
 
         // Add APY data to pool object

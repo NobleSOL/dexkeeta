@@ -81,8 +81,11 @@ async function fetchKTAPrice() {
  * Calculate prices for a list of token addresses
  * KTA price is fetched live from CoinGecko
  * Other token prices are calculated based on pool ratios with KTA
+ *
+ * @param {string[]} addresses - Array of token addresses
+ * @returns {Promise<Object>} - Map of address to {priceUsd, change24h}
  */
-async function calculateTokenPrices(addresses) {
+export async function calculateTokenPrices(addresses) {
   const prices = {};
 
   // Get KTA price from CoinGecko (with fallback)

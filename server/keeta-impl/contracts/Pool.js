@@ -353,6 +353,9 @@ export class Pool {
     // Log swap in explorer-style format and save to transaction history
     await this.logSwapTransaction(userAddress, tokenIn, tokenOut, amountIn, amountOut, priceImpact);
 
+    // Record snapshot for APY/volume tracking
+    await this.recordSnapshot();
+
     return {
       amountOut,
       feeAmount,
@@ -428,6 +431,29 @@ export class Pool {
       await fs.writeFile(historyPath, JSON.stringify(transactions, null, 2));
     } catch (err) {
       console.error('Failed to save transaction history:', err.message);
+    }
+  }
+
+  /**
+   * Record pool snapshot for APY/volume tracking
+   * Saves current reserves to database for historical comparison
+   */
+  async recordSnapshot() {
+    if (!this.repository) {
+      console.warn('⚠️ No repository available, skipping snapshot');
+      return;
+    }
+
+    try {
+      await this.repository.saveSnapshot(
+        this.poolAddress,
+        this.reserveA,
+        this.reserveB
+      );
+      console.log(`📸 Snapshot recorded: ${this.poolAddress.slice(-8)} - reserveA: ${this.reserveA}, reserveB: ${this.reserveB}`);
+    } catch (error) {
+      // Non-critical - don't fail the operation if snapshot fails
+      console.warn(`⚠️ Failed to record snapshot (non-critical):`, error.message);
     }
   }
 
@@ -582,6 +608,9 @@ export class Pool {
 
     console.log(`✅ Added liquidity: ${amountA} tokenA + ${amountB} tokenB → ${shares} shares`);
     console.log(`   Pool: ${this.poolAddress}`);
+
+    // Record snapshot for APY/volume tracking
+    await this.recordSnapshot();
 
     return {
       amountA,
@@ -804,6 +833,9 @@ export class Pool {
 
     console.log(`✅ Removed liquidity: ${liquidity} shares → ${amountA} tokenA + ${amountB} tokenB`);
     console.log(`   From pool: ${this.poolAddress}`);
+
+    // Record snapshot for APY/volume tracking
+    await this.recordSnapshot();
 
     return {
       amountA,
