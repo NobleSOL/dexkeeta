@@ -372,72 +372,11 @@ export default function KeetaIndex() {
     <div className="container py-10">
       <div className="mx-auto max-w-7xl">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column - Wallet */}
-          <div className="lg:col-span-5">
-            <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur sticky top-24 h-fit">
-              {!wallet ? (
-                <>
-                  <CardHeader>
-                    <div className="flex items-center gap-2 mb-2">
-                      <img
-                        src="https://cdn.builder.io/api/v1/image/assets%2Fd70091a6f5494e0195b033a72f7e79ae%2Fee3a0a5652aa480f9aa42277503e94b2?format=webp&width=64"
-                        alt="Silverback logo"
-                        className="h-8 w-8 rounded-md object-contain"
-                      />
-                      <CardTitle>Silverback DEX</CardTitle>
-                    </div>
-                    <CardDescription>
-                      Connect your Keeta wallet to start trading
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {isKeythingsInstalled() ? (
-                      <Button
-                        onClick={connectKeythingsWallet}
-                        disabled={loading}
-                        className="w-full bg-brand hover:bg-brand/90"
-                      >
-                        {loading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Connecting...
-                          </>
-                        ) : (
-                          <>
-                            <Wallet className="mr-2 h-4 w-4" />
-                            Connect Keythings
-                          </>
-                        )}
-                      </Button>
-                    ) : (
-                      <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-4">
-                        <div className="flex items-start gap-3">
-                          <Info className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                          <div className="space-y-3">
-                            <div>
-                              <h3 className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-1">
-                                Keythings Wallet Required
-                              </h3>
-                              <p className="text-xs text-muted-foreground">
-                                Install the Keythings browser extension
-                              </p>
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => window.open('https://keythings.io', '_blank')}
-                            >
-                              Get Keythings →
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </>
-              ) : (
-                <>
-                  <CardHeader>
+          {/* Left Column - Wallet (only show when connected) */}
+          {wallet && (
+            <div className="lg:col-span-5">
+              <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur sticky top-24 h-fit">
+                <CardHeader>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="rounded-lg bg-brand/20 p-2 flex-shrink-0">
@@ -556,13 +495,12 @@ export default function KeetaIndex() {
                   )}
                 </div>
               </CardContent>
-                </>
-              )}
             </Card>
           </div>
+          )}
 
           {/* Right Column - Swap */}
-          <div className="lg:col-span-7">
+          <div className={wallet ? "lg:col-span-7" : "lg:col-span-12"}>
             <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
               <CardHeader>
                 <CardTitle>Swap</CardTitle>
