@@ -26,7 +26,9 @@ export class PoolManager {
 
     // Discover pools on-chain (in case persistent storage was lost)
     // This ensures pools survive server restarts/redeployments
-    await this.discoverPoolsOnChain();
+    // DISABLED: This blocks server startup if Keeta API is slow
+    // TODO: Move to background job or lazy-load on-demand
+    // await this.discoverPoolsOnChain();
 
     console.log(`✅ PoolManager initialized with ${this.pools.size} pools`);
     return this;
