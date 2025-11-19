@@ -9,6 +9,55 @@ import { fetchTokenDecimals } from '../utils/client.js';
 const router = express.Router();
 
 /**
+ * Helper: Load pool on-demand if not in memory
+ * Prevents "Pool not found" errors when async pool discovery is still running
+ */
+async function getPoolInstance(poolManager, poolAddress) {
+  // Check in-memory first
+  let pool = Array.from(poolManager.pools.values()).find(
+    (p) => p.poolAddress === poolAddress
+  );
+
+  // If not in memory, load from database on-demand
+  if (!pool) {
+    console.log(`⚠️ Pool ${poolAddress.slice(-8)} not in memory, loading from database...`);
+
+    try {
+      const poolData = await poolManager.repository.getPoolByAddress(poolAddress);
+
+      if (poolData) {
+        const { Pool } = await import('../contracts/Pool.js');
+        const { getPairKey } = await import('../utils/constants.js');
+
+        pool = new Pool(
+          poolData.pool_address,
+          poolData.token_a,
+          poolData.token_b,
+          poolData.lp_token_address,
+          null,
+          poolManager.repository
+        );
+        await pool.initialize();
+
+        // Cache it for future requests
+        const pairKey = getPairKey(poolData.token_a, poolData.token_b);
+        poolManager.pools.set(pairKey, pool);
+
+        console.log(`✅ Pool loaded on-demand: ${poolAddress.slice(-8)}`);
+      }
+    } catch (dbError) {
+      console.error(`❌ Failed to load pool from database:`, dbError);
+    }
+  }
+
+  if (!pool) {
+    throw new Error(`Pool not found in memory or database: ${poolAddress}`);
+  }
+
+  return pool;
+}
+
+/**
  * POST /api/liquidity/keythings/complete
  * Complete a Keythings wallet add liquidity by minting LP tokens to user
  *
@@ -53,14 +102,8 @@ router.post('/complete', async (req, res) => {
     const opsClient = await getOpsClient();
     const poolManager = await getPoolManager();
 
-    // Find the pool instance
-    const pool = Array.from(poolManager.pools.values()).find(
-      (p) => p.poolAddress === poolAddress
-    );
-
-    if (!pool) {
-      throw new Error(`Pool not found: ${poolAddress}`);
-    }
+    // Find or load the pool instance (with on-demand loading)
+    const pool = await getPoolInstance(poolManager, poolAddress);
 
     // Get current reserves to calculate LP shares
     await pool.updateReserves();
@@ -254,14 +297,8 @@ router.post('/remove-complete', async (req, res) => {
     const opsClient = await getOpsClient();
     const poolManager = await getPoolManager();
 
-    // Find the pool instance
-    const pool = Array.from(poolManager.pools.values()).find(
-      (p) => p.poolAddress === poolAddress
-    );
-
-    if (!pool) {
-      throw new Error(`Pool not found: ${poolAddress}`);
-    }
+    // Find or load the pool instance (with on-demand loading)
+    const pool = await getPoolInstance(poolManager, poolAddress);
 
     // Update reserves to get current state
     await pool.updateReserves();
