@@ -24,10 +24,36 @@ app.use((req, res, next) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
-app.listen(port, () => {
+app.listen(port, async () => {
   console.log(`🚀 Fusion Starter server running on port ${port}`);
   console.log(`📱 Frontend: http://localhost:${port}`);
   console.log(`🔧 API: http://localhost:${port}/api`);
+
+  // Start snapshot recorder for APY/volume calculation
+  console.log('\n📸 Starting pool snapshot recorder...');
+  const { SnapshotRecorder } = await import('./keeta-impl/utils/snapshot-recorder.js');
+  const recorder = new SnapshotRecorder();
+
+  // Record initial snapshot on startup
+  try {
+    await recorder.recordAllSnapshots();
+    console.log('✅ Initial snapshot recorded\n');
+  } catch (error) {
+    console.error('❌ Failed to record initial snapshot:', error.message);
+  }
+
+  // Schedule hourly snapshot recording
+  const HOUR_MS = 60 * 60 * 1000;
+  setInterval(async () => {
+    try {
+      console.log('\n⏰ Running hourly snapshot recording...');
+      await recorder.recordAllSnapshots();
+    } catch (error) {
+      console.error('❌ Hourly snapshot failed:', error.message);
+    }
+  }, HOUR_MS);
+
+  console.log(`⏰ Snapshot recorder scheduled (every hour)\n`);
 });
 
 // Graceful shutdown
