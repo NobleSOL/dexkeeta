@@ -57,6 +57,123 @@ async function getPoolInstance(poolManager, poolAddress) {
 }
 
 /**
+ * POST /api/swap/keythings/preflight
+ * Validate that swap TX2 will succeed before user signs TX1
+ * CRITICAL: Prevents fund loss by checking backend readiness before TX1
+ *
+ * Body: {
+ *   userAddress: string,
+ *   poolAddress: string,
+ *   tokenIn: string,
+ *   tokenOut: string,
+ *   amountIn: string (atomic units)
+ * }
+ *
+ * Returns: {
+ *   canProceed: true/false,
+ *   reason: string (if canProceed=false),
+ *   estimatedOutput: string (if canProceed=true),
+ *   priceImpact: number (if canProceed=true)
+ * }
+ */
+router.post('/preflight', async (req, res) => {
+  try {
+    const { userAddress, poolAddress, tokenIn, tokenOut, amountIn } = req.body;
+
+    console.log('🔍 Preflight validation for swap...');
+    console.log(`   Pool: ${poolAddress?.slice(0, 12)}...`);
+    console.log(`   Amount In: ${amountIn}`);
+
+    // Validate required fields
+    if (!userAddress || !poolAddress || !tokenIn || !tokenOut || !amountIn) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+      });
+    }
+
+    // 1. Check if OPS client is available
+    try {
+      const opsClient = await getOpsClient();
+      if (!opsClient) {
+        return res.json({
+          success: true,
+          canProceed: false,
+          reason: 'Backend service temporarily unavailable',
+        });
+      }
+    } catch (error) {
+      return res.json({
+        success: true,
+        canProceed: false,
+        reason: 'Backend service unavailable',
+      });
+    }
+
+    // 2. Check if pool exists
+    const poolManager = await getPoolManager();
+    let pool;
+    try {
+      pool = await getPoolInstance(poolManager, poolAddress);
+    } catch (error) {
+      return res.json({
+        success: true,
+        canProceed: false,
+        reason: 'Pool not found',
+      });
+    }
+
+    // 3. Validate pool has liquidity
+    await pool.updateReserves();
+    const reserveIn = pool.tokenA === tokenIn ? BigInt(pool.reserveA) : BigInt(pool.reserveB);
+    const reserveOut = pool.tokenA === tokenIn ? BigInt(pool.reserveB) : BigInt(pool.reserveA);
+
+    if (reserveIn === 0n || reserveOut === 0n) {
+      return res.json({
+        success: true,
+        canProceed: false,
+        reason: 'Pool has no liquidity',
+      });
+    }
+
+    // 4. Calculate swap output
+    const amountInBigInt = BigInt(amountIn);
+    const amountInWithFee = amountInBigInt * 997n;
+    const numerator = amountInWithFee * reserveOut;
+    const denominator = reserveIn * 1000n + amountInWithFee;
+    const amountOut = numerator / denominator;
+
+    if (amountOut === 0n || amountOut >= reserveOut) {
+      return res.json({
+        success: true,
+        canProceed: false,
+        reason: 'Insufficient liquidity for this amount',
+      });
+    }
+
+    // 5. Calculate price impact
+    const priceImpact = Number((amountOut * 10000n) / reserveOut) / 100;
+
+    console.log(`✅ Preflight passed: Output ${amountOut}, Impact ${priceImpact.toFixed(2)}%`);
+
+    return res.json({
+      success: true,
+      canProceed: true,
+      estimatedOutput: amountOut.toString(),
+      priceImpact: Number(priceImpact.toFixed(2)),
+      warning: priceImpact > 5 ? `High price impact: ${priceImpact.toFixed(2)}%` : null,
+    });
+  } catch (error) {
+    console.error('❌ Preflight error:', error);
+    return res.json({
+      success: true,
+      canProceed: false,
+      reason: `Validation failed: ${error.message}`,
+    });
+  }
+});
+
+/**
  * POST /api/swap/keythings/complete
  * Complete a Keythings wallet swap by sending output tokens to user
  *
