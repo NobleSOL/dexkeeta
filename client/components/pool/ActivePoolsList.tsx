@@ -373,7 +373,7 @@ export function ActivePoolsList({ onManage }: ActivePoolsListProps) {
           <div>
             <h3 className="text-lg font-semibold">Active Pools</h3>
             <p className="text-sm text-muted-foreground">
-              {sortedPools.length} liquidity pool{sortedPools.length !== 1 ? 's' : ''} on Silverback V2
+              {sortedPools.length} liquidity pool{sortedPools.length !== 1 ? 's' : ''} on Silverback
             </p>
           </div>
 
