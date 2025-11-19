@@ -17,6 +17,7 @@ import {
   Send,
 } from "lucide-react";
 import QuickFill from "@/components/shared/QuickFill";
+import TrendingPills from "@/components/shared/TrendingPills";
 import { useKeetaWallet } from "@/contexts/KeetaWalletContext";
 import {
   getSwapQuote as getSwapQuoteClient,
@@ -665,6 +666,16 @@ export default function KeetaIndex() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Trending on Keeta */}
+              <TrendingPills symbols={["KTA", "USDK", "KBTC"]} />
+            </aside>
+          )}
+
+          {/* When wallet not connected, show trending card below swap */}
+          {!wallet && (
+            <aside className="order-2 md:order-2 md:col-span-2 space-y-6">
+              <TrendingPills symbols={["KTA", "USDK", "KBTC"]} />
             </aside>
           )}
         </div>

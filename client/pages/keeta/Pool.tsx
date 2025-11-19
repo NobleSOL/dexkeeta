@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import {
   Loader2,
@@ -846,115 +845,33 @@ export default function KeetaPool() {
         </div>
 
         <div className="mx-auto max-w-3xl rounded-2xl border border-border/60 bg-card/60 p-6 shadow-2xl shadow-black/30 backdrop-blur">
-          <Tabs defaultValue="pools" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="pools">
-                <Droplets className="h-4 w-4 mr-2" />
-                Pools
-              </TabsTrigger>
-              <TabsTrigger value="liquidity">
-                <Plus className="h-4 w-4 mr-2" />
-                Liquidity
-              </TabsTrigger>
-            </TabsList>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setCreateMode(false)}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                  !createMode
+                    ? "bg-brand text-white shadow-sm"
+                    : "bg-secondary/60 hover:bg-secondary/80"
+                }`}
+              >
+                Add Liquidity
+              </button>
+              <button
+                onClick={() => setCreateMode(true)}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                  createMode
+                    ? "bg-brand text-white shadow-sm"
+                    : "bg-secondary/60 hover:bg-secondary/80"
+                }`}
+              >
+                Create Pool
+              </button>
+            </div>
+          </div>
 
-            {/* Pools Tab */}
-            <TabsContent value="pools">
-              {/* Dashboard Stats */}
-              <PoolDashboard
-                totalTVL={dashboardStats.totalTVL}
-                totalPools={dashboardStats.totalPools}
-                totalVolume24h={dashboardStats.totalVolume24h}
-                avgAPY={dashboardStats.avgAPY}
-              />
-
-              <div className="mt-6">
-                {allPools.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Droplets className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No pools yet. Be the first to create one!</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {allPools.map((pool) => {
-                      // Find user's position in this pool
-                      const userPosition = positions.find(
-                        (p) => p.poolAddress === pool.poolAddress
-                      );
-
-                      // Convert to KeetaPoolCardData format
-                      const poolCardData: KeetaPoolCardData = {
-                        poolAddress: pool.poolAddress,
-                        tokenA: pool.tokenA,
-                        tokenB: pool.tokenB,
-                        symbolA: pool.symbolA,
-                        symbolB: pool.symbolB,
-                        reserveA: pool.reserveA,
-                        reserveB: pool.reserveB,
-                        reserveAHuman: pool.reserveAHuman,
-                        reserveBHuman: pool.reserveBHuman,
-                        decimalsA: pool.decimalsA || 9,
-                        decimalsB: pool.decimalsB || 9,
-                        totalShares: pool.totalShares,
-                        userPosition: userPosition
-                          ? {
-                              shares: userPosition.liquidity,
-                              sharePercent: userPosition.sharePercent,
-                              amountA: userPosition.amountA,
-                              amountB: userPosition.amountB,
-                            }
-                          : undefined,
-                      };
-
-                      return (
-                        <KeetaPoolCard
-                          key={pool.poolAddress}
-                          pool={poolCardData}
-                          onManage={(selectedPool) => {
-                            setSelectedPoolForLiq(selectedPool.poolAddress);
-                            setCreateMode(false);
-                          }}
-                          onRemoveLiquidity={async (selectedPool, percent) => {
-                            const position = positions.find(
-                              (p) => p.poolAddress === selectedPool.poolAddress
-                            );
-                            if (!position) return;
-
-                            setRemoveLiqPercent(percent);
-                            await removeLiquidity(position);
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-
-            {/* Liquidity Tab */}
-            <TabsContent value="liquidity">
-              <div className="space-y-4">
-                {/* Mode Toggle */}
-                <div className="flex gap-2">
-                  <Button
-                    variant={!createMode ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCreateMode(false)}
-                    className="flex-1"
-                  >
-                    Select Pool
-                  </Button>
-                  <Button
-                    variant={createMode ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCreateMode(true)}
-                    className="flex-1"
-                  >
-                    Create Pool
-                  </Button>
-                </div>
-
-                {!createMode ? (
+          <div className="space-y-3">
+            {!createMode ? (
                   // Select Existing Pool Mode
                   <div className="rounded-lg bg-secondary/40 p-3">
                     <label className="text-xs text-muted-foreground mb-2 block">Select Pool</label>
@@ -1262,9 +1179,81 @@ export default function KeetaPool() {
                     </>
                   );
                 })()}
+          </div>
+        </div>
+
+        {/* Active Pools Section */}
+        <div className="mt-10">
+          {/* Dashboard Stats */}
+          <PoolDashboard
+            totalTVL={dashboardStats.totalTVL}
+            totalPools={dashboardStats.totalPools}
+            totalVolume24h={dashboardStats.totalVolume24h}
+            avgAPY={dashboardStats.avgAPY}
+          />
+
+          <div className="mt-6">
+            {allPools.length === 0 ? (
+              <div className="rounded-2xl border border-border/60 bg-card/60 p-12 shadow-2xl shadow-black/30 backdrop-blur text-center text-muted-foreground">
+                <Droplets className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No pools yet. Be the first to create one!</p>
               </div>
-            </TabsContent>
-          </Tabs>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {allPools.map((pool) => {
+                  // Find user's position in this pool
+                  const userPosition = positions.find(
+                    (p) => p.poolAddress === pool.poolAddress
+                  );
+
+                  // Convert to KeetaPoolCardData format
+                  const poolCardData: KeetaPoolCardData = {
+                    poolAddress: pool.poolAddress,
+                    tokenA: pool.tokenA,
+                    tokenB: pool.tokenB,
+                    symbolA: pool.symbolA,
+                    symbolB: pool.symbolB,
+                    reserveA: pool.reserveA,
+                    reserveB: pool.reserveB,
+                    reserveAHuman: pool.reserveAHuman,
+                    reserveBHuman: pool.reserveBHuman,
+                    decimalsA: pool.decimalsA || 9,
+                    decimalsB: pool.decimalsB || 9,
+                    totalShares: pool.totalShares,
+                    userPosition: userPosition
+                      ? {
+                          shares: userPosition.liquidity,
+                          sharePercent: userPosition.sharePercent,
+                          amountA: userPosition.amountA,
+                          amountB: userPosition.amountB,
+                        }
+                      : undefined,
+                  };
+
+                  return (
+                    <KeetaPoolCard
+                      key={pool.poolAddress}
+                      pool={poolCardData}
+                      onManage={(selectedPool) => {
+                        setSelectedPoolForLiq(selectedPool.poolAddress);
+                        setCreateMode(false);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      onRemoveLiquidity={async (selectedPool, percent) => {
+                        const position = positions.find(
+                          (p) => p.poolAddress === selectedPool.poolAddress
+                        );
+                        if (!position) return;
+
+                        setRemoveLiqPercent(percent);
+                        await removeLiquidity(position);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
