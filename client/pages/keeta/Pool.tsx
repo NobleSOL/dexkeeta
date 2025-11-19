@@ -835,66 +835,6 @@ export default function KeetaPool() {
     }
   }
 
-  if (!wallet) {
-    return (
-      <div className="container py-10">
-        <div className="mx-auto max-w-2xl">
-          <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
-            <CardHeader>
-              <CardTitle>Liquidity Pools</CardTitle>
-              <CardDescription>
-                Connect your Keeta wallet to view and manage liquidity pools
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isKeythingsInstalled() ? (
-                <div className="rounded-xl border border-border/40 bg-secondary/40 p-6 backdrop-blur">
-                  <h3 className="text-sm font-semibold mb-4">Connect Wallet</h3>
-                  <Button onClick={connectKeythingsWallet} disabled={loading} className="w-full bg-brand hover:bg-brand/90">
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Connecting...
-                      </>
-                    ) : (
-                      <>
-                        <Wallet className="mr-2 h-4 w-4" />
-                        Connect Keythings
-                      </>
-                    )}
-                  </Button>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-6">
-                  <div className="flex items-start gap-3">
-                    <Info className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                    <div className="space-y-3">
-                      <div>
-                        <h3 className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-1">
-                          Keythings Wallet Required
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          Install the Keythings browser extension to connect and manage liquidity pools.
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open('https://keythings.io', '_blank')}
-                      >
-                        Get Keythings Wallet →
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="container py-10">
       <div className="mx-auto max-w-7xl">
@@ -902,7 +842,58 @@ export default function KeetaPool() {
           {/* Left Column - Wallet */}
           <div className="lg:col-span-5">
             <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur sticky top-24 h-fit">
-              <CardHeader>
+              {!wallet ? (
+                <>
+                  <CardHeader>
+                    <CardTitle>Liquidity Pools</CardTitle>
+                    <CardDescription>
+                      Connect your Keeta wallet to manage pools
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isKeythingsInstalled() ? (
+                      <Button onClick={connectKeythingsWallet} disabled={loading} className="w-full bg-brand hover:bg-brand/90">
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          <>
+                            <Wallet className="mr-2 h-4 w-4" />
+                            Connect Keythings
+                          </>
+                        )}
+                      </Button>
+                    ) : (
+                      <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-4">
+                        <div className="flex items-start gap-3">
+                          <Info className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                          <div className="space-y-3">
+                            <div>
+                              <h3 className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-1">
+                                Keythings Wallet Required
+                              </h3>
+                              <p className="text-xs text-muted-foreground">
+                                Install the Keythings browser extension
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open('https://keythings.io', '_blank')}
+                            >
+                              Get Keythings →
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </>
+              ) : (
+                <>
+                  <CardHeader>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="rounded-lg bg-brand/20 p-2 flex-shrink-0">
@@ -1021,6 +1012,8 @@ export default function KeetaPool() {
                   )}
                 </div>
               </CardContent>
+                </>
+              )}
             </Card>
           </div>
 

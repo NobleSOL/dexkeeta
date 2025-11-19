@@ -30,21 +30,20 @@ export default function KeetaPortfolio() {
     loading,
   } = useKeetaWallet();
 
-  if (!wallet) {
-    return (
-      <div className="container py-10">
-        <div className="mx-auto max-w-2xl">
-          <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
-            <CardHeader>
-              <CardTitle>Portfolio</CardTitle>
-              <CardDescription>
-                Connect your Keeta wallet to view your portfolio
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isKeythingsInstalled() ? (
-                <div className="rounded-xl border border-border/40 bg-secondary/40 p-6 backdrop-blur">
-                  <h3 className="text-sm font-semibold mb-4">Connect Wallet</h3>
+  return (
+    <div className="container py-10">
+      <div className="mx-auto max-w-2xl">
+        <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
+          {!wallet ? (
+            <>
+              <CardHeader>
+                <CardTitle>Portfolio</CardTitle>
+                <CardDescription>
+                  Connect your Keeta wallet to view your portfolio
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isKeythingsInstalled() ? (
                   <Button onClick={connectKeythingsWallet} disabled={loading} className="w-full bg-brand hover:bg-brand/90">
                     {loading ? (
                       <>
@@ -58,42 +57,34 @@ export default function KeetaPortfolio() {
                       </>
                     )}
                   </Button>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-6">
-                  <div className="flex items-start gap-3">
-                    <Info className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                    <div className="space-y-3">
-                      <div>
-                        <h3 className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-1">
-                          Keythings Wallet Required
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          Install the Keythings browser extension to connect and view your portfolio.
-                        </p>
+                ) : (
+                  <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-4">
+                    <div className="flex items-start gap-3">
+                      <Info className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                      <div className="space-y-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-1">
+                            Keythings Wallet Required
+                          </h3>
+                          <p className="text-xs text-muted-foreground">
+                            Install the Keythings browser extension
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open('https://keythings.io', '_blank')}
+                        >
+                          Get Keythings →
+                        </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open('https://keythings.io', '_blank')}
-                      >
-                        Get Keythings Wallet →
-                      </Button>
                     </div>
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="container py-10">
-      <div className="mx-auto max-w-2xl">
-        <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
+                )}
+              </CardContent>
+            </>
+          ) : (
+            <>
               <CardHeader>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -213,7 +204,9 @@ export default function KeetaPortfolio() {
                   )}
                 </div>
               </CardContent>
-            </Card>
+            </>
+          )}
+        </Card>
       </div>
     </div>
   );
