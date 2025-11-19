@@ -2,7 +2,6 @@ import React, { createContext, useContext, useEffect, useState, useMemo } from "
 import { toast } from "@/hooks/use-toast";
 import { useKeetaTokenPrices } from "@/components/keeta/useKeetaPricing";
 import {
-  generateWallet as generateWalletClient,
   getAddressFromSeed,
   fetchBalances,
   fetchLiquidityPositions,
@@ -88,8 +87,6 @@ interface KeetaWalletContextValue {
   displayedTokens: any[];
 
   // Wallet functions
-  generateWallet: () => Promise<void>;
-  importWallet: () => Promise<void>;
   connectKeythingsWallet: () => Promise<void>;
   disconnectWallet: () => void;
   refreshBalances: () => Promise<void>;
@@ -108,17 +105,6 @@ interface KeetaWalletContextValue {
   setSendAmount: (amt: string) => void;
   sending: boolean;
   executeSend: () => Promise<void>;
-
-  // Seed backup
-  newSeedBackup: string | null;
-  setNewSeedBackup: (seed: string | null) => void;
-  seedBackupConfirmed: boolean;
-  setSeedBackupConfirmed: (confirmed: boolean) => void;
-  copiedSeed: boolean;
-  setCopiedSeed: (copied: boolean) => void;
-  seedInput: string;
-  setSeedInput: (seed: string) => void;
-  confirmSeedBackup: () => void;
 }
 
 const KeetaWalletContext = createContext<KeetaWalletContextValue | undefined>(undefined);
@@ -128,12 +114,8 @@ export function KeetaWalletProvider({ children }: { children: React.ReactNode })
   const [loading, setLoading] = useState(false);
   const [pools, setPools] = useState<KeetaPool[]>([]);
   const [positions, setPositions] = useState<KeetaPosition[]>([]);
-  const [seedInput, setSeedInput] = useState("");
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [showAllTokens, setShowAllTokens] = useState(false);
-  const [newSeedBackup, setNewSeedBackup] = useState<string | null>(null);
-  const [seedBackupConfirmed, setSeedBackupConfirmed] = useState(false);
-  const [copiedSeed, setCopiedSeed] = useState(false);
 
   // Keythings wallet state
   const [keythingsConnected, setKeythingsConnected] = useState(false);
@@ -388,136 +370,6 @@ export function KeetaWalletProvider({ children }: { children: React.ReactNode })
     // Clean up interval on unmount or when wallet disconnects
     return () => clearInterval(intervalId);
   }, [wallet?.address, wallet?.seed, wallet?.accountIndex]);
-
-  async function generateWallet() {
-    setLoading(true);
-    try {
-      console.log('🔵 Generating wallet (client-side)...');
-
-      // Generate hex seed directly
-      const walletData = generateWalletClient();
-      const seed = walletData.seed;
-      console.log('✅ Hex seed generated');
-
-      // Derive address from seed
-      const address = getAddressFromSeed(seed, 0);
-
-      console.log('✅ Wallet generated client-side');
-      console.log('✅ Address:', address);
-      console.log('✅ Seed:', seed.substring(0, 10) + '...');
-
-      // Show seed backup modal
-      setNewSeedBackup(seed);
-      setSeedBackupConfirmed(false);
-      console.log('✅ Showing seed backup modal');
-    } catch (error: any) {
-      console.error('❌ Generate wallet error:', error);
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function confirmSeedBackup() {
-    if (!newSeedBackup || !seedBackupConfirmed) {
-      toast({
-        title: "Confirmation Required",
-        description: "Please confirm that you have saved your seed phrase",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Now actually import the wallet
-    importWalletWithSeed(newSeedBackup);
-    setNewSeedBackup(null);
-    setSeedBackupConfirmed(false);
-    setCopiedSeed(false);
-  }
-
-  async function importWalletWithSeed(seed: string, accountIndex: number = 0) {
-    setLoading(true);
-    try {
-      console.log('🔍 Importing wallet (client-side)...');
-      console.log('🔍 Account index:', accountIndex);
-
-      // Clear old positions data before importing new wallet (pools are global, kept intact)
-      setPositions([]);
-
-      // Derive address from seed (client-side)
-      const address = getAddressFromSeed(seed, accountIndex);
-      console.log('✅ Address derived:', address);
-
-      // Fetch balances from blockchain (client-side)
-      console.log('📊 Fetching balances from Keeta blockchain...');
-      const tokens = await fetchBalances(seed, accountIndex);
-      console.log('✅ Balances fetched:', tokens);
-
-      const walletData: KeetaWallet = {
-        address,
-        seed,
-        accountIndex,
-        tokens,
-      };
-
-      setWallet(walletData);
-      localStorage.setItem("keetaWallet", JSON.stringify(walletData));
-
-      console.log('✅ Wallet imported and saved to localStorage');
-
-      toast({
-        title: "Wallet Ready!",
-        description: `Connected to ${address.substring(0, 20)}... with ${tokens.length} tokens`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function importWallet() {
-    if (!seedInput) {
-      toast({
-        title: "Invalid Input",
-        description: "Please enter your hex seed",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      // Validate hex seed
-      const trimmedSeed = seedInput.trim();
-      if (trimmedSeed.length !== 64 || !/^[0-9a-fA-F]+$/.test(trimmedSeed)) {
-        toast({
-          title: "Invalid Hex Seed",
-          description: "Seed must be 64 hex characters",
-          variant: "destructive",
-        });
-        return;
-      }
-      const seed = trimmedSeed;
-
-      // Use importWalletWithSeed helper with accountIndex 0 (default)
-      await importWalletWithSeed(seed, 0);
-      setSeedInput("");
-    } catch (error: any) {
-      toast({
-        title: "Import Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  }
 
   async function refreshBalances() {
     if (!wallet) return;
@@ -842,8 +694,6 @@ export function KeetaWalletProvider({ children }: { children: React.ReactNode })
     tokenPrices,
     sortedTokens,
     displayedTokens,
-    generateWallet,
-    importWallet,
     connectKeythingsWallet,
     disconnectWallet,
     refreshBalances,
@@ -860,15 +710,6 @@ export function KeetaWalletProvider({ children }: { children: React.ReactNode })
     setSendAmount,
     sending,
     executeSend,
-    newSeedBackup,
-    setNewSeedBackup,
-    seedBackupConfirmed,
-    setSeedBackupConfirmed,
-    copiedSeed,
-    setCopiedSeed,
-    seedInput,
-    setSeedInput,
-    confirmSeedBackup,
   };
 
   return <KeetaWalletContext.Provider value={value}>{children}</KeetaWalletContext.Provider>;

@@ -12,6 +12,7 @@ import {
   Copy,
   CheckCircle2,
   Send,
+  Info,
 } from "lucide-react";
 import { KeetaPoolCard, KeetaPoolCardData } from "@/components/keeta/KeetaPoolCard";
 import { PoolDashboard } from "@/components/pool/PoolDashboard";
@@ -20,6 +21,7 @@ import {
   addLiquidity as addLiquidityClient,
   removeLiquidity as removeLiquidityClient,
 } from "@/lib/keeta-client";
+import { isKeythingsInstalled } from "@/lib/keythings-provider";
 
 // API base URL
 const API_BASE = import.meta.env.VITE_KEETA_API_BASE || `${window.location.origin}/api`;
@@ -44,6 +46,8 @@ export default function KeetaPool() {
     setSendRecipient,
     setSendAmount,
     setSendDialogOpen,
+    connectKeythingsWallet,
+    loading,
   } = useKeetaWallet();
 
   // Add liquidity state
@@ -837,11 +841,54 @@ export default function KeetaPool() {
         <div className="mx-auto max-w-2xl">
           <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
             <CardHeader>
-              <CardTitle>Connect Wallet</CardTitle>
+              <CardTitle>Liquidity Pools</CardTitle>
               <CardDescription>
-                Please connect your wallet to view and manage liquidity pools
+                Connect your Keeta wallet to view and manage liquidity pools
               </CardDescription>
             </CardHeader>
+            <CardContent>
+              {isKeythingsInstalled() ? (
+                <div className="rounded-xl border border-border/40 bg-secondary/40 p-6 backdrop-blur">
+                  <h3 className="text-sm font-semibold mb-4">Connect Wallet</h3>
+                  <Button onClick={connectKeythingsWallet} disabled={loading} className="w-full bg-brand hover:bg-brand/90">
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="mr-2 h-4 w-4" />
+                        Connect Keythings
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-6">
+                  <div className="flex items-start gap-3">
+                    <Info className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                    <div className="space-y-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-1">
+                          Keythings Wallet Required
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Install the Keythings browser extension to connect and manage liquidity pools.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open('https://keythings.io', '_blank')}
+                      >
+                        Get Keythings Wallet →
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
           </Card>
         </div>
       </div>
