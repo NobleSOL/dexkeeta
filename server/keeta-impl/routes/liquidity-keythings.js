@@ -5,6 +5,7 @@ import { getPoolManager } from '../contracts/PoolManager.js';
 import { getOpsClient, accountFromAddress, mintLPTokens } from '../utils/client.js';
 import { toAtomic } from '../utils/constants.js';
 import { fetchTokenDecimals } from '../utils/client.js';
+import { markTX2Complete, markTX2Failed } from '../db/transaction-state.js';
 
 const router = express.Router();
 
@@ -75,6 +76,8 @@ async function getPoolInstance(poolManager, poolAddress) {
  * }
  */
 router.post('/complete', async (req, res) => {
+  const { transactionId } = req.body; // Optional: for transaction tracking
+
   try {
     console.log('💧 Keythings add liquidity /complete endpoint called');
     console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
@@ -212,6 +215,15 @@ router.post('/complete', async (req, res) => {
     const decimalsA = await fetchTokenDecimals(tokenA);
     const decimalsB = await fetchTokenDecimals(tokenB);
 
+    // Track TX2 completion (if transaction tracking enabled)
+    if (transactionId) {
+      try {
+        await markTX2Complete(transactionId, 'lp_minted');
+      } catch (trackingError) {
+        console.warn('⚠️ Failed to track TX2 completion (non-critical):', trackingError.message);
+      }
+    }
+
     res.json({
       success: true,
       result: {
@@ -224,6 +236,16 @@ router.post('/complete', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Keythings add liquidity completion error:', error);
+
+    // Track TX2 failure (if transaction tracking enabled)
+    if (transactionId) {
+      try {
+        await markTX2Failed(transactionId, error.message);
+      } catch (trackingError) {
+        console.warn('⚠️ Failed to track TX2 failure (non-critical):', trackingError.message);
+      }
+    }
+
     res.status(500).json({
       success: false,
       error: error.message,
@@ -273,6 +295,8 @@ function sqrt(value) {
  * }
  */
 router.post('/remove-complete', async (req, res) => {
+  const { transactionId } = req.body; // Optional: for transaction tracking
+
   try {
     console.log('🔥 Keythings remove liquidity /remove-complete endpoint called');
     console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
@@ -393,6 +417,15 @@ router.post('/remove-complete', async (req, res) => {
     const decimalsA = await fetchTokenDecimals(pool.tokenA);
     const decimalsB = await fetchTokenDecimals(pool.tokenB);
 
+    // Track TX2 completion (if transaction tracking enabled)
+    if (transactionId) {
+      try {
+        await markTX2Complete(transactionId, 'lp_burned');
+      } catch (trackingError) {
+        console.warn('⚠️ Failed to track TX2 completion (non-critical):', trackingError.message);
+      }
+    }
+
     res.json({
       success: true,
       result: {
@@ -405,6 +438,16 @@ router.post('/remove-complete', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Keythings remove liquidity completion error:', error);
+
+    // Track TX2 failure (if transaction tracking enabled)
+    if (transactionId) {
+      try {
+        await markTX2Failed(transactionId, error.message);
+      } catch (trackingError) {
+        console.warn('⚠️ Failed to track TX2 failure (non-critical):', trackingError.message);
+      }
+    }
+
     res.status(500).json({
       success: false,
       error: error.message,

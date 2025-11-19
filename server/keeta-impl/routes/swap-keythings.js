@@ -3,6 +3,7 @@
 import express from 'express';
 import { getPoolManager } from '../contracts/PoolManager.js';
 import { getOpsClient, accountFromAddress } from '../utils/client.js';
+import { markTX2Complete, markTX2Failed } from '../db/transaction-state.js';
 
 const router = express.Router();
 
@@ -71,6 +72,8 @@ async function getPoolInstance(poolManager, poolAddress) {
  * }
  */
 router.post('/complete', async (req, res) => {
+  const { transactionId } = req.body; // Optional: for transaction tracking
+
   try {
     const { userAddress, poolAddress, tokenOut, amountOut } = req.body;
 
@@ -79,6 +82,9 @@ router.post('/complete', async (req, res) => {
     console.log(`   Pool: ${poolAddress.slice(0, 12)}...`);
     console.log(`   Token Out: ${tokenOut.slice(0, 12)}...`);
     console.log(`   Amount Out: ${amountOut}`);
+    if (transactionId) {
+      console.log(`   Transaction ID: ${transactionId}`);
+    }
 
     if (!userAddress || !poolAddress || !tokenOut || !amountOut) {
       return res.status(400).json({
@@ -137,6 +143,15 @@ router.post('/complete', async (req, res) => {
     // Update pool reserves after swap
     await pool.updateReserves();
 
+    // Track TX2 completion (if transaction tracking enabled)
+    if (transactionId) {
+      try {
+        await markTX2Complete(transactionId, tx2Hash || 'unknown');
+      } catch (trackingError) {
+        console.warn('⚠️ Failed to track TX2 completion (non-critical):', trackingError.message);
+      }
+    }
+
     res.json({
       success: true,
       result: {
@@ -146,6 +161,16 @@ router.post('/complete', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Keythings swap completion error:', error);
+
+    // Track TX2 failure (if transaction tracking enabled)
+    if (transactionId) {
+      try {
+        await markTX2Failed(transactionId, error.message);
+      } catch (trackingError) {
+        console.warn('⚠️ Failed to track TX2 failure (non-critical):', trackingError.message);
+      }
+    }
+
     res.status(500).json({
       success: false,
       error: error.message,
