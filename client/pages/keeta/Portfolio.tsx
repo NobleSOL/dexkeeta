@@ -31,8 +31,9 @@ export default function KeetaPortfolio() {
   } = useKeetaWallet();
 
   return (
-    <div className="container py-10">
-      <div className="mx-auto max-w-2xl">
+    <div className="min-h-[calc(100vh-4rem)] bg-[radial-gradient(100%_60%_at_0%_0%,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0)_60%),radial-gradient(80%_50%_at_100%_100%,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0)_50%)]">
+      <div className="container py-10">
+        <div className="mx-auto max-w-5xl">
         {wallet ? (
           <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
             <CardHeader>
@@ -165,6 +166,7 @@ export default function KeetaPortfolio() {
             </CardHeader>
           </Card>
         )}
+        </div>
       </div>
     </div>
   );

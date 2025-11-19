@@ -836,558 +836,435 @@ export default function KeetaPool() {
   }
 
   return (
-    <div className="container py-10">
-      <div className="mx-auto max-w-7xl">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column - Wallet (only show when connected) */}
-          {wallet && (
-            <div className="lg:col-span-5">
-              <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur sticky top-24 h-fit">
-                <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="rounded-lg bg-brand/20 p-2 flex-shrink-0">
-                      <Wallet className="h-5 w-5 text-sky-400" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <CardTitle className="text-lg">Keeta Wallet</CardTitle>
-                      <div className="flex items-center gap-2 mt-1">
-                        <code className="text-xs font-mono text-muted-foreground truncate block max-w-[180px] sm:max-w-none">
-                          {wallet.address.slice(0, 12)}...{wallet.address.slice(-8)}
-                        </code>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 flex-shrink-0"
-                          onClick={() => copyToClipboard(wallet.address)}
-                        >
-                          {copiedAddress ? (
-                            <CheckCircle2 className="h-3 w-3 text-green-400" />
-                          ) : (
-                            <Copy className="h-3 w-3" />
-                          )}
-                        </Button>
-                      </div>
-                      {wallet.isKeythings && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-                          <span className="text-xs text-green-400 font-medium">Connected via Keythings</span>
-                        </div>
-                      )}
-                    </div>
+    <div className="min-h-[calc(100vh-4rem)] bg-[radial-gradient(100%_60%_at_0%_0%,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0)_60%),radial-gradient(80%_50%_at_100%_100%,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0)_50%)]">
+      <div className="container py-10">
+        <div className="mb-6 text-center">
+          <h1 className="text-3xl font-bold mb-2">Liquidity Pools</h1>
+          <p className="text-muted-foreground text-sm">
+            Add liquidity to earn fees on every swap
+          </p>
+        </div>
+
+        <div className="mx-auto max-w-3xl rounded-2xl border border-border/60 bg-card/60 p-6 shadow-2xl shadow-black/30 backdrop-blur">
+          <Tabs defaultValue="pools" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="pools">
+                <Droplets className="h-4 w-4 mr-2" />
+                Pools
+              </TabsTrigger>
+              <TabsTrigger value="liquidity">
+                <Plus className="h-4 w-4 mr-2" />
+                Liquidity
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Pools Tab */}
+            <TabsContent value="pools">
+              {/* Dashboard Stats */}
+              <PoolDashboard
+                totalTVL={dashboardStats.totalTVL}
+                totalPools={dashboardStats.totalPools}
+                totalVolume24h={dashboardStats.totalVolume24h}
+                avgAPY={dashboardStats.avgAPY}
+              />
+
+              <div className="mt-6">
+                {allPools.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Droplets className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No pools yet. Be the first to create one!</p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={disconnectWallet} className="flex-shrink-0 self-start sm:self-center">
-                    Disconnect
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {allPools.map((pool) => {
+                      // Find user's position in this pool
+                      const userPosition = positions.find(
+                        (p) => p.poolAddress === pool.poolAddress
+                      );
+
+                      // Convert to KeetaPoolCardData format
+                      const poolCardData: KeetaPoolCardData = {
+                        poolAddress: pool.poolAddress,
+                        tokenA: pool.tokenA,
+                        tokenB: pool.tokenB,
+                        symbolA: pool.symbolA,
+                        symbolB: pool.symbolB,
+                        reserveA: pool.reserveA,
+                        reserveB: pool.reserveB,
+                        reserveAHuman: pool.reserveAHuman,
+                        reserveBHuman: pool.reserveBHuman,
+                        decimalsA: pool.decimalsA || 9,
+                        decimalsB: pool.decimalsB || 9,
+                        totalShares: pool.totalShares,
+                        userPosition: userPosition
+                          ? {
+                              shares: userPosition.liquidity,
+                              sharePercent: userPosition.sharePercent,
+                              amountA: userPosition.amountA,
+                              amountB: userPosition.amountB,
+                            }
+                          : undefined,
+                      };
+
+                      return (
+                        <KeetaPoolCard
+                          key={pool.poolAddress}
+                          pool={poolCardData}
+                          onManage={(selectedPool) => {
+                            setSelectedPoolForLiq(selectedPool.poolAddress);
+                            setCreateMode(false);
+                          }}
+                          onRemoveLiquidity={async (selectedPool, percent) => {
+                            const position = positions.find(
+                              (p) => p.poolAddress === selectedPool.poolAddress
+                            );
+                            if (!position) return;
+
+                            setRemoveLiqPercent(percent);
+                            await removeLiquidity(position);
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Liquidity Tab */}
+            <TabsContent value="liquidity">
+              <div className="space-y-4">
+                {/* Mode Toggle */}
+                <div className="flex gap-2">
+                  <Button
+                    variant={!createMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCreateMode(false)}
+                    className="flex-1"
+                  >
+                    Select Pool
+                  </Button>
+                  <Button
+                    variant={createMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCreateMode(true)}
+                    className="flex-1"
+                  >
+                    Create Pool
                   </Button>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {displayedTokens.map((token) => (
-                    <div
-                      key={token.address}
-                      className="group relative rounded-xl border border-border/40 bg-gradient-to-br from-secondary/40 to-secondary/20 p-4 transition-all hover:border-brand/40 hover:shadow-lg hover:shadow-brand/5"
+
+                {!createMode ? (
+                  // Select Existing Pool Mode
+                  <div className="rounded-lg bg-secondary/40 p-3">
+                    <label className="text-xs text-muted-foreground mb-2 block">Select Pool</label>
+                    <select
+                      value={selectedPoolForLiq}
+                      onChange={(e) => setSelectedPoolForLiq(e.target.value)}
+                      className="w-full rounded-lg bg-card hover:bg-card/80 px-3 py-2 text-sm font-semibold border-none outline-none cursor-pointer"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          {/* Token Icon */}
-                          {token.symbol === "KTA" ? (
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full overflow-hidden bg-gradient-to-br from-brand/20 to-brand/10">
-                              <img
-                                src="https://assets.kraken.com/marketing/web/icons-uni-webp/s_kta.webp?i=kds"
-                                alt="KTA"
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                          ) : (
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-brand/20 to-brand/10 text-sm font-bold text-brand">
-                              {token.symbol.slice(0, 2)}
-                            </div>
-                          )}
-                          <div>
-                            <div className="text-base font-semibold">{token.symbol}</div>
-                            <code
-                              className="text-xs text-muted-foreground cursor-pointer hover:text-sky-400 transition-colors"
-                              onClick={() => copyToClipboard(token.address)}
-                              title="Click to copy address"
-                            >
-                              {token.address.slice(0, 6)}...{token.address.slice(-4)}
-                            </code>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={() => {
-                              setSendToken(token);
-                              setSendRecipient("");
-                              setSendAmount("");
-                              setSendDialogOpen(true);
-                            }}
-                          >
-                            <Send className="h-3 w-3" />
-                          </Button>
-                          <div className="text-right">
-                            <div className="text-lg font-bold">{token.balanceFormatted}</div>
-                            <div className="text-xs text-muted-foreground">{token.symbol}</div>
-                            {tokenPrices?.[token.address]?.priceUsd && (
-                              <div className="text-xs text-muted-foreground">
-                                ${(parseFloat(token.balanceFormatted) * tokenPrices[token.address].priceUsd!).toFixed(2)} USD
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                      <option value="">Choose a pool...</option>
+                      {pools.map((pool) => (
+                        <option key={pool.poolAddress} value={pool.poolAddress}>
+                          {pool.symbolA} / {pool.symbolB}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  // Create New Pool Mode
+                  <div className="space-y-3">
+                    {/* Token A Input */}
+                    <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">
+                      <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Token A</span>
+                        {newPoolTokenA && wallet && (
+                          <span>
+                            Bal: {wallet.tokens.find(t => t.address === newPoolTokenA)?.balanceFormatted || "0"}
+                          </span>
+                        )}
                       </div>
-                    </div>
-                  ))}
-                  {wallet.tokens.length > 5 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowAllTokens(!showAllTokens)}
-                      className="w-full text-sm hover:bg-brand/10"
-                    >
-                      {showAllTokens ? (
-                        <>
-                          <span>Show Less</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Show {wallet.tokens.length - 5} More Token{wallet.tokens.length - 5 > 1 ? 's' : ''}</span>
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          )}
-
-          {/* Right Column - Pools and Liquidity Tabs */}
-          <div className={wallet ? "lg:col-span-7" : "lg:col-span-12"}>
-            <Tabs defaultValue="pools" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6 bg-card/60 border border-border/40">
-                <TabsTrigger value="pools" className="text-xs sm:text-sm px-2 sm:px-4">
-                  <Droplets className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Pools</span>
-                </TabsTrigger>
-                <TabsTrigger value="liquidity" className="text-xs sm:text-sm px-2 sm:px-4">
-                  <Plus className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Liquidity</span>
-                </TabsTrigger>
-              </TabsList>
-
-              {/* Pools Tab */}
-              <TabsContent value="pools">
-                {/* Dashboard Stats */}
-                <PoolDashboard
-                  totalTVL={dashboardStats.totalTVL}
-                  totalPools={dashboardStats.totalPools}
-                  totalVolume24h={dashboardStats.totalVolume24h}
-                  avgAPY={dashboardStats.avgAPY}
-                />
-
-                <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur mt-6">
-                  <CardHeader>
-                    <CardTitle>Liquidity Pools</CardTitle>
-                    <CardDescription>View all pools and manage your positions</CardDescription>
-                  </CardHeader>
-                  <CardContent className="overflow-visible">
-                    {allPools.length === 0 ? (
-                      <div className="text-center py-12 text-muted-foreground">
-                        <Droplets className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No pools yet. Be the first to create one!</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                        {allPools.map((pool) => {
-                          // Find user's position in this pool
-                          const userPosition = positions.find(
-                            (p) => p.poolAddress === pool.poolAddress
-                          );
-
-                          // Convert to KeetaPoolCardData format
-                          const poolCardData: KeetaPoolCardData = {
-                            poolAddress: pool.poolAddress,
-                            tokenA: pool.tokenA,
-                            tokenB: pool.tokenB,
-                            symbolA: pool.symbolA,
-                            symbolB: pool.symbolB,
-                            reserveA: pool.reserveA,
-                            reserveB: pool.reserveB,
-                            reserveAHuman: pool.reserveAHuman,
-                            reserveBHuman: pool.reserveBHuman,
-                            decimalsA: pool.decimalsA || 9, // Use actual decimals from API, fallback to 9
-                            decimalsB: pool.decimalsB || 9,
-                            totalShares: pool.totalShares,
-                            userPosition: userPosition
-                              ? {
-                                  shares: userPosition.liquidity,
-                                  sharePercent: userPosition.sharePercent,
-                                  amountA: userPosition.amountA,
-                                  amountB: userPosition.amountB,
-                                }
-                              : undefined,
-                          };
-
-                          return (
-                            <KeetaPoolCard
-                              key={pool.poolAddress}
-                              pool={poolCardData}
-                              onManage={(selectedPool) => {
-                                // Switch to liquidity tab and pre-select this pool
-                                setSelectedPoolForLiq(selectedPool.poolAddress);
-                                setCreateMode(false);
-                                // Note: Can't programmatically switch tabs here, user needs to click Liquidity tab
-                              }}
-                              onRemoveLiquidity={async (selectedPool, percent) => {
-                                // Find the position to pass to removeLiquidity
-                                const position = positions.find(
-                                  (p) => p.poolAddress === selectedPool.poolAddress
-                                );
-                                if (!position) return;
-
-                                setRemoveLiqPercent(percent);
-                                await removeLiquidity(position);
-                              }}
-                            />
-                          );
-                        })}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* Liquidity Tab */}
-              <TabsContent value="liquidity">
-                <Card className="rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/30 backdrop-blur">
-                  <CardHeader>
-                    <CardTitle>Liquidity</CardTitle>
-                    <CardDescription>Add liquidity to pools and earn trading fees</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Mode Toggle */}
-                    <div className="flex gap-2">
-                      <Button
-                        variant={!createMode ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setCreateMode(false)}
-                        className="flex-1"
-                      >
-                        Select Pool
-                      </Button>
-                      <Button
-                        variant={createMode ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setCreateMode(true)}
-                        className="flex-1"
-                      >
-                        Create Pool
-                      </Button>
-                    </div>
-
-                    {!createMode ? (
-                      // Select Existing Pool Mode
-                      <div className="rounded-lg bg-secondary/40 p-3">
-                        <label className="text-xs text-muted-foreground mb-2 block">Select Pool</label>
+                      <div className="flex items-center gap-3">
                         <select
-                          value={selectedPoolForLiq}
-                          onChange={(e) => setSelectedPoolForLiq(e.target.value)}
-                          className="w-full rounded-lg bg-card hover:bg-card/80 px-3 py-2 text-sm font-semibold border-none outline-none cursor-pointer"
+                          value={newPoolTokenA}
+                          onChange={(e) => {
+                            const tokenA = e.target.value;
+                            setNewPoolTokenA(tokenA);
+
+                            if (tokenA && newPoolTokenB) {
+                              const existingPool = pools.find(p =>
+                                (p.tokenA === tokenA && p.tokenB === newPoolTokenB) ||
+                                (p.tokenA === newPoolTokenB && p.tokenB === tokenA)
+                              );
+
+                              if (existingPool) {
+                                setCreateMode(false);
+                                setSelectedPoolForLiq(existingPool.poolAddress);
+                                toast({
+                                  title: "Pool Already Exists",
+                                  description: "Switched to existing pool. Add liquidity to it instead.",
+                                });
+                              }
+                            }
+                          }}
+                          className="min-w-24 sm:min-w-28 shrink-0 rounded-lg bg-card hover:bg-card/80 px-3 py-2 text-sm font-semibold border-none outline-none cursor-pointer"
                         >
-                          <option value="">Choose a pool...</option>
-                          {pools.map((pool) => (
-                            <option key={pool.poolAddress} value={pool.poolAddress}>
-                              {pool.symbolA} / {pool.symbolB}
+                          <option value="">Select</option>
+                          {wallet?.tokens.map((token) => (
+                            <option key={token.address} value={token.address}>
+                              {token.symbol}
                             </option>
                           ))}
                         </select>
+                        <input
+                          inputMode="decimal"
+                          pattern="^[0-9]*[.,]?[0-9]*$"
+                          placeholder="0.00"
+                          value={liqAmountA}
+                          onChange={(e) => setLiqAmountA(e.target.value.replace(",", "."))}
+                          disabled={!newPoolTokenA}
+                          className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
+                        />
                       </div>
-                    ) : (
-                      // Create New Pool Mode
-                      <div className="space-y-3">
-                        {/* Token A Input - Matching swap design */}
-                        <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">
-                          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-                            <span>Token A</span>
-                            {newPoolTokenA && wallet && (
-                              <span>
-                                Bal: {wallet.tokens.find(t => t.address === newPoolTokenA)?.balanceFormatted || "0"}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <select
-                              value={newPoolTokenA}
-                              onChange={(e) => {
-                                const tokenA = e.target.value;
-                                setNewPoolTokenA(tokenA);
-
-                                // Check if pool already exists with current Token B selection
-                                if (tokenA && newPoolTokenB) {
-                                  const existingPool = pools.find(p =>
-                                    (p.tokenA === tokenA && p.tokenB === newPoolTokenB) ||
-                                    (p.tokenA === newPoolTokenB && p.tokenB === tokenA)
-                                  );
-
-                                  if (existingPool) {
-                                    // Pool exists, switch to Select Pool mode
-                                    setCreateMode(false);
-                                    setSelectedPoolForLiq(existingPool.poolAddress);
-                                    toast({
-                                      title: "Pool Already Exists",
-                                      description: "Switched to existing pool. Add liquidity to it instead.",
-                                    });
-                                  }
-                                }
-                              }}
-                              className="min-w-24 sm:min-w-28 shrink-0 rounded-lg bg-card hover:bg-card/80 px-3 py-2 text-sm font-semibold border-none outline-none cursor-pointer"
-                            >
-                              <option value="">Select</option>
-                              {wallet?.tokens.map((token) => (
-                                <option key={token.address} value={token.address}>
-                                  {token.symbol}
-                                </option>
-                              ))}
-                            </select>
-                            <input
-                              inputMode="decimal"
-                              pattern="^[0-9]*[.,]?[0-9]*$"
-                              placeholder="0.00"
-                              value={liqAmountA}
-                              onChange={(e) => setLiqAmountA(e.target.value.replace(",", "."))}
-                              disabled={!newPoolTokenA}
-                              className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
-                            />
-                          </div>
-                          {liqAmountA && newPoolTokenA && tokenPrices?.[newPoolTokenA]?.priceUsd && (
-                            <div className="text-xs text-muted-foreground text-right mt-1">
-                              ${(parseFloat(liqAmountA) * tokenPrices[newPoolTokenA].priceUsd!).toFixed(2)} USD
-                            </div>
-                          )}
+                      {liqAmountA && newPoolTokenA && tokenPrices?.[newPoolTokenA]?.priceUsd && (
+                        <div className="text-xs text-muted-foreground text-right mt-1">
+                          ${(parseFloat(liqAmountA) * tokenPrices[newPoolTokenA].priceUsd!).toFixed(2)} USD
                         </div>
+                      )}
+                    </div>
 
-                        {/* Plus Icon - Vertical with toggle */}
-                        <div className="relative flex justify-center -my-2">
-                          <button
-                            type="button"
-                            onClick={toggleLiquidityTokens}
-                            className="rounded-xl border border-border/60 bg-card p-2 shadow-md hover:bg-card/80 transition-colors cursor-pointer z-10"
-                          >
-                            <ArrowDownUp className="h-4 w-4" />
-                          </button>
-                        </div>
+                    {/* Arrow Icon */}
+                    <div className="relative flex justify-center -my-2">
+                      <button
+                        type="button"
+                        onClick={toggleLiquidityTokens}
+                        className="rounded-xl border border-border/60 bg-card p-2 shadow-md hover:bg-card/80 transition-colors cursor-pointer z-10"
+                      >
+                        <ArrowDownUp className="h-4 w-4" />
+                      </button>
+                    </div>
 
-                        {/* Token B Input - Matching swap design */}
-                        <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">
-                          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-                            <span>Token B</span>
-                            {newPoolTokenB && wallet && (
-                              <span>
-                                Bal: {wallet.tokens.find(t => t.address === newPoolTokenB)?.balanceFormatted || "0"}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <select
-                              value={newPoolTokenB}
-                              onChange={(e) => {
-                                const tokenB = e.target.value;
-                                setNewPoolTokenB(tokenB);
+                    {/* Token B Input */}
+                    <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">
+                      <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Token B</span>
+                        {newPoolTokenB && wallet && (
+                          <span>
+                            Bal: {wallet.tokens.find(t => t.address === newPoolTokenB)?.balanceFormatted || "0"}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <select
+                          value={newPoolTokenB}
+                          onChange={(e) => {
+                            const tokenB = e.target.value;
+                            setNewPoolTokenB(tokenB);
 
-                                // Check if pool already exists with current Token A selection
-                                if (newPoolTokenA && tokenB) {
-                                  const existingPool = pools.find(p =>
-                                    (p.tokenA === newPoolTokenA && p.tokenB === tokenB) ||
-                                    (p.tokenA === tokenB && p.tokenB === newPoolTokenA)
-                                  );
+                            if (newPoolTokenA && tokenB) {
+                              const existingPool = pools.find(p =>
+                                (p.tokenA === newPoolTokenA && p.tokenB === tokenB) ||
+                                (p.tokenA === tokenB && p.tokenB === newPoolTokenA)
+                              );
 
-                                  if (existingPool) {
-                                    // Pool exists, switch to Select Pool mode
-                                    setCreateMode(false);
-                                    setSelectedPoolForLiq(existingPool.poolAddress);
-                                    toast({
-                                      title: "Pool Already Exists",
-                                      description: "Switched to existing pool. Add liquidity to it instead.",
-                                    });
-                                  }
-                                }
-                              }}
-                              disabled={!newPoolTokenA}
-                              className="min-w-24 sm:min-w-28 shrink-0 rounded-lg bg-card hover:bg-card/80 px-3 py-2 text-sm font-semibold border-none outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <option value="">Select</option>
-                              {wallet?.tokens
-                                .filter((token) => token.address !== newPoolTokenA)
-                                .map((token) => (
-                                  <option key={token.address} value={token.address}>
-                                    {token.symbol}
-                                  </option>
-                                ))}
-                            </select>
-                            <input
-                              inputMode="decimal"
-                              pattern="^[0-9]*[.,]?[0-9]*$"
-                              placeholder="0.00"
-                              value={liqAmountB}
-                              onChange={(e) => setLiqAmountB(e.target.value.replace(",", "."))}
-                              disabled={!newPoolTokenB}
-                              className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
-                            />
-                          </div>
-                          {liqAmountB && newPoolTokenB && tokenPrices?.[newPoolTokenB]?.priceUsd && (
-                            <div className="text-xs text-muted-foreground text-right mt-1">
-                              ${(parseFloat(liqAmountB) * tokenPrices[newPoolTokenB].priceUsd!).toFixed(2)} USD
-                            </div>
-                          )}
-                        </div>
-
-                        <Button
-                          onClick={createPool}
-                          disabled={creatingPool || !newPoolTokenA || !newPoolTokenB || !liqAmountA || !liqAmountB}
-                          className="w-full h-12 text-base font-semibold"
+                              if (existingPool) {
+                                setCreateMode(false);
+                                setSelectedPoolForLiq(existingPool.poolAddress);
+                                toast({
+                                  title: "Pool Already Exists",
+                                  description: "Switched to existing pool. Add liquidity to it instead.",
+                                });
+                              }
+                            }
+                          }}
+                          disabled={!newPoolTokenA}
+                          className="min-w-24 sm:min-w-28 shrink-0 rounded-lg bg-card hover:bg-card/80 px-3 py-2 text-sm font-semibold border-none outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {creatingPool ? (
+                          <option value="">Select</option>
+                          {wallet?.tokens
+                            .filter((token) => token.address !== newPoolTokenA)
+                            .map((token) => (
+                              <option key={token.address} value={token.address}>
+                                {token.symbol}
+                              </option>
+                            ))}
+                        </select>
+                        <input
+                          inputMode="decimal"
+                          pattern="^[0-9]*[.,]?[0-9]*$"
+                          placeholder="0.00"
+                          value={liqAmountB}
+                          onChange={(e) => setLiqAmountB(e.target.value.replace(",", "."))}
+                          disabled={!newPoolTokenB}
+                          className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
+                        />
+                      </div>
+                      {liqAmountB && newPoolTokenB && tokenPrices?.[newPoolTokenB]?.priceUsd && (
+                        <div className="text-xs text-muted-foreground text-right mt-1">
+                          ${(parseFloat(liqAmountB) * tokenPrices[newPoolTokenB].priceUsd!).toFixed(2)} USD
+                        </div>
+                      )}
+                    </div>
+
+                    <Button
+                      onClick={!wallet ? connectKeythingsWallet : createPool}
+                      disabled={wallet ? (creatingPool || !newPoolTokenA || !newPoolTokenB || !liqAmountA || !liqAmountB) : loading}
+                      className="w-full h-12 text-base font-semibold"
+                    >
+                      {!wallet ? (
+                        loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          <>
+                            <Wallet className="mr-2 h-4 w-4" />
+                            Connect Wallet
+                          </>
+                        )
+                      ) : creatingPool ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating Pool...
+                        </>
+                      ) : (
+                        "Create Pool & Add Liquidity"
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {!createMode && selectedPoolForLiq && (() => {
+                  const pool = pools.find((p) => p.poolAddress === selectedPoolForLiq);
+                  if (!pool) return null;
+
+                  return (
+                    <>
+                      {/* Token A Input */}
+                      <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">
+                        <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{pool.symbolA || ''}</span>
+                          {wallet && (
+                            <span>
+                              Bal: {wallet.tokens.find(t => t.address === pool.tokenA)?.balanceFormatted || "0"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="min-w-24 sm:min-w-28 shrink-0 rounded-lg bg-card px-3 py-2 text-sm font-semibold">
+                            {pool.symbolA || ''}
+                          </div>
+                          <input
+                            inputMode="decimal"
+                            pattern="^[0-9]*[.,]?[0-9]*$"
+                            placeholder="0.00"
+                            value={liqAmountA}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(",", ".");
+                              setLiqAmountA(value);
+                              if (value && pool && pool.reserveAHuman && pool.reserveBHuman) {
+                                const amountA = parseFloat(value);
+                                if (!isNaN(amountA) && amountA > 0) {
+                                  const ratio = pool.reserveBHuman / pool.reserveAHuman;
+                                  const amountB = (amountA * ratio).toFixed(6);
+                                  setLiqAmountB(amountB);
+                                }
+                              } else if (!value) {
+                                setLiqAmountB("");
+                              }
+                            }}
+                            className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60"
+                          />
+                        </div>
+                        {liqAmountA && pool.tokenA && tokenPrices?.[pool.tokenA]?.priceUsd && (
+                          <div className="text-xs text-muted-foreground text-right mt-1">
+                            ${(parseFloat(liqAmountA) * tokenPrices[pool.tokenA].priceUsd!).toFixed(2)} USD
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Arrow Icon */}
+                      <div className="relative flex justify-center -my-2">
+                        <div className="rounded-xl border border-border/60 bg-card p-2 shadow-md">
+                          <ArrowDownUp className="h-4 w-4" />
+                        </div>
+                      </div>
+
+                      {/* Token B Input */}
+                      <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">
+                        <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{pool.symbolB || ''}</span>
+                          {wallet && (
+                            <span>
+                              Bal: {wallet.tokens.find(t => t.address === pool.tokenB)?.balanceFormatted || "0"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="min-w-24 sm:min-w-28 shrink-0 rounded-lg bg-card px-3 py-2 text-sm font-semibold">
+                            {pool.symbolB || ''}
+                          </div>
+                          <input
+                            inputMode="decimal"
+                            pattern="^[0-9]*[.,]?[0-9]*$"
+                            placeholder="0.00"
+                            value={liqAmountB}
+                            onChange={(e) => setLiqAmountB(e.target.value.replace(",", "."))}
+                            className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60"
+                          />
+                        </div>
+                        {liqAmountB && pool.tokenB && tokenPrices?.[pool.tokenB]?.priceUsd && (
+                          <div className="text-xs text-muted-foreground text-right mt-1">
+                            ${(parseFloat(liqAmountB) * tokenPrices[pool.tokenB].priceUsd!).toFixed(2)} USD
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Pool Info */}
+                      {liqAmountA && liqAmountB && (
+                        <div className="rounded-lg bg-secondary/40 p-3 space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Pool Ratio</span>
+                            <span className="font-medium">
+                              1 {pool.symbolA} = {(Number(pool.reserveBHuman) / Number(pool.reserveAHuman)).toFixed(6)} {pool.symbolB}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      <Button
+                        onClick={!wallet ? connectKeythingsWallet : addLiquidity}
+                        disabled={wallet ? (addingLiq || !liqAmountA || !liqAmountB) : loading}
+                        className="w-full h-12 text-base font-semibold"
+                      >
+                        {!wallet ? (
+                          loading ? (
                             <>
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Creating Pool...
+                              Connecting...
                             </>
                           ) : (
-                            "Create Pool & Add Liquidity"
-                          )}
-                        </Button>
-                      </div>
-                    )}
-
-                    {!createMode && selectedPoolForLiq && (() => {
-                      const pool = pools.find((p) => p.poolAddress === selectedPoolForLiq);
-                      if (!pool) return null;
-
-                      return (
-                        <>
-                          {/* Token A Input */}
-                          <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">
-                            <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-                              <span>{pool.symbolA || ''}</span>
-                              {wallet && (
-                                <span>
-                                  Bal: {wallet.tokens.find(t => t.address === pool.tokenA)?.balanceFormatted || "0"}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="min-w-24 sm:min-w-28 shrink-0 rounded-lg bg-card px-3 py-2 text-sm font-semibold">
-                                {pool.symbolA || ''}
-                              </div>
-                              <input
-                                inputMode="decimal"
-                                pattern="^[0-9]*[.,]?[0-9]*$"
-                                placeholder="0.00"
-                                value={liqAmountA}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(",", ".");
-                                  setLiqAmountA(value);
-                                  // Auto-calculate Token B amount based on pool ratio
-                                  if (value && pool && pool.reserveAHuman && pool.reserveBHuman) {
-                                    const amountA = parseFloat(value);
-                                    if (!isNaN(amountA) && amountA > 0) {
-                                      const ratio = pool.reserveBHuman / pool.reserveAHuman;
-                                      const amountB = (amountA * ratio).toFixed(6);
-                                      setLiqAmountB(amountB);
-                                    }
-                                  } else if (!value) {
-                                    setLiqAmountB("");
-                                  }
-                                }}
-                                className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60"
-                              />
-                            </div>
-                            {liqAmountA && pool.tokenA && tokenPrices?.[pool.tokenA]?.priceUsd && (
-                              <div className="text-xs text-muted-foreground text-right mt-1">
-                                ${(parseFloat(liqAmountA) * tokenPrices[pool.tokenA].priceUsd!).toFixed(2)} USD
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Plus Icon - Vertical */}
-                          <div className="relative flex justify-center -my-2">
-                            <div className="rounded-xl border border-border/60 bg-card p-2 shadow-md">
-                              <ArrowDownUp className="h-4 w-4" />
-                            </div>
-                          </div>
-
-                          {/* Token B Input */}
-                          <div className="rounded-xl border border-border/60 bg-secondary/60 p-4">
-                            <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-                              <span>{pool.symbolB || ''}</span>
-                              {wallet && (
-                                <span>
-                                  Bal: {wallet.tokens.find(t => t.address === pool.tokenB)?.balanceFormatted || "0"}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="min-w-24 sm:min-w-28 shrink-0 rounded-lg bg-card px-3 py-2 text-sm font-semibold">
-                                {pool.symbolB || ''}
-                              </div>
-                              <input
-                                inputMode="decimal"
-                                pattern="^[0-9]*[.,]?[0-9]*$"
-                                placeholder="0.00"
-                                value={liqAmountB}
-                                onChange={(e) => setLiqAmountB(e.target.value.replace(",", "."))}
-                                className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60"
-                              />
-                            </div>
-                            {liqAmountB && pool.tokenB && tokenPrices?.[pool.tokenB]?.priceUsd && (
-                              <div className="text-xs text-muted-foreground text-right mt-1">
-                                ${(parseFloat(liqAmountB) * tokenPrices[pool.tokenB].priceUsd!).toFixed(2)} USD
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Pool Info */}
-                          {liqAmountA && liqAmountB && (
-                            <div className="rounded-lg bg-secondary/40 p-3 space-y-2 text-sm">
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Pool Ratio</span>
-                                <span className="font-medium">
-                                  1 {pool.symbolA} = {(Number(pool.reserveBHuman) / Number(pool.reserveAHuman)).toFixed(6)} {pool.symbolB}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Share of Pool</span>
-                                <span className="font-medium">~0.00%</span>
-                              </div>
-                            </div>
-                          )}
-
-                          <Button
-                            onClick={addLiquidity}
-                            disabled={addingLiq || !liqAmountA || !liqAmountB}
-                            className="w-full h-12 text-base font-semibold"
-                          >
-                            {addingLiq ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Adding Liquidity...
-                              </>
-                            ) : (
-                              "Add Liquidity"
-                            )}
-                          </Button>
-                        </>
-                      );
-                    })()}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
+                            <>
+                              <Wallet className="mr-2 h-4 w-4" />
+                              Connect Wallet
+                            </>
+                          )
+                        ) : addingLiq ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Adding Liquidity...
+                          </>
+                        ) : (
+                          "Add Liquidity"
+                        )}
+                      </Button>
+                    </>
+                  );
+                })()}
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </div>
