@@ -20,7 +20,7 @@ function resolveBaseAddressForSymbol(
   return null;
 }
 
-export default function TrendingPills({ symbols }: { symbols: string[] }) {
+export default function TrendingPills({ symbols, title = "Trending on Base" }: { symbols: string[]; title?: string }) {
   const { data: remoteTokens } = useTokenList();
   const remoteBySymbol = useMemo(() => {
     const map: Record<string, { address: `0x${string}` }> = {};
@@ -48,7 +48,7 @@ export default function TrendingPills({ symbols }: { symbols: string[] }) {
   return (
     <div>
       <div className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-        Trending on Base
+        {title}
       </div>
       <ul className="space-y-3">
         {items.map((t) => {
