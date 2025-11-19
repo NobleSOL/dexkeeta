@@ -1,6 +1,6 @@
 // Pricing API for Keeta tokens
 import express from 'express';
-import { getPoolRepository } from '../db/pool-repository.js';
+import { getPoolManager } from '../contracts/PoolManager.js';
 
 const router = express.Router();
 
@@ -49,18 +49,47 @@ router.get('/tokens', async (req, res) => {
 });
 
 /**
+ * Fetch KTA price from CoinGecko API
+ * Falls back to default price if API fails
+ */
+async function fetchKTAPrice() {
+  try {
+    const response = await fetch(
+      'https://api.coingecko.com/api/v3/simple/price?ids=keeta&vs_currencies=usd',
+      {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(5000), // 5 second timeout
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      const price = data?.keeta?.usd;
+      if (typeof price === 'number' && price > 0) {
+        return price;
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to fetch KTA price from CoinGecko:', error.message);
+  }
+
+  // Fallback to default price
+  return 0.15;
+}
+
+/**
  * Calculate prices for a list of token addresses
- * KTA price is hardcoded/fetched from external source
+ * KTA price is fetched live from CoinGecko
  * Other token prices are calculated based on pool ratios with KTA
  */
 async function calculateTokenPrices(addresses) {
   const prices = {};
 
-  // Get KTA price (hardcoded for now - TODO: fetch from price oracle when available)
-  const ktaPrice = 0.15; // $0.15 per KTA (placeholder)
+  // Get KTA price from CoinGecko (with fallback)
+  const ktaPrice = await fetchKTAPrice();
 
-  const repository = getPoolRepository();
-  const pools = await repository.getAllPools();
+  const poolManager = await getPoolManager();
+  const pools = poolManager.getAllPools();
 
   for (const address of addresses) {
     if (address === KTA_ADDRESS) {
@@ -72,15 +101,15 @@ async function calculateTokenPrices(addresses) {
     } else {
       // Find a pool with this token and KTA
       const pool = pools.find(p =>
-        (p.token_a === address && p.token_b === KTA_ADDRESS) ||
-        (p.token_b === address && p.token_a === KTA_ADDRESS)
+        (p.tokenA === address && p.tokenB === KTA_ADDRESS) ||
+        (p.tokenB === address && p.tokenA === KTA_ADDRESS)
       );
 
       if (pool) {
         // Calculate price based on pool ratio
-        const isTokenA = pool.token_a === address;
-        const reserveToken = isTokenA ? BigInt(pool.reserve_a) : BigInt(pool.reserve_b);
-        const reserveKTA = isTokenA ? BigInt(pool.reserve_b) : BigInt(pool.reserve_a);
+        const isTokenA = pool.tokenA === address;
+        const reserveToken = isTokenA ? BigInt(pool.reserveA) : BigInt(pool.reserveB);
+        const reserveKTA = isTokenA ? BigInt(pool.reserveB) : BigInt(pool.reserveA);
 
         if (reserveToken > 0n && reserveKTA > 0n) {
           // Price of token = (reserveKTA / reserveToken) * ktaPrice

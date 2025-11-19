@@ -1175,6 +1175,11 @@ export default function KeetaPool() {
                               className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
                             />
                           </div>
+                          {liqAmountA && newPoolTokenA && tokenPrices?.[newPoolTokenA]?.priceUsd && (
+                            <div className="text-xs text-muted-foreground text-right mt-1">
+                              ${(parseFloat(liqAmountA) * tokenPrices[newPoolTokenA].priceUsd!).toFixed(2)} USD
+                            </div>
+                          )}
                         </div>
 
                         {/* Plus Icon - Vertical with toggle */}
@@ -1245,6 +1250,11 @@ export default function KeetaPool() {
                               className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
                             />
                           </div>
+                          {liqAmountB && newPoolTokenB && tokenPrices?.[newPoolTokenB]?.priceUsd && (
+                            <div className="text-xs text-muted-foreground text-right mt-1">
+                              ${(parseFloat(liqAmountB) * tokenPrices[newPoolTokenB].priceUsd!).toFixed(2)} USD
+                            </div>
+                          )}
                         </div>
 
                         <Button
@@ -1307,6 +1317,11 @@ export default function KeetaPool() {
                                 className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60"
                               />
                             </div>
+                            {liqAmountA && pool.tokenA && tokenPrices?.[pool.tokenA]?.priceUsd && (
+                              <div className="text-xs text-muted-foreground text-right mt-1">
+                                ${(parseFloat(liqAmountA) * tokenPrices[pool.tokenA].priceUsd!).toFixed(2)} USD
+                              </div>
+                            )}
                           </div>
 
                           {/* Plus Icon - Vertical */}
@@ -1339,6 +1354,11 @@ export default function KeetaPool() {
                                 className="ml-auto flex-1 min-w-0 bg-transparent text-right text-2xl sm:text-3xl font-semibold outline-none placeholder:text-muted-foreground/60"
                               />
                             </div>
+                            {liqAmountB && pool.tokenB && tokenPrices?.[pool.tokenB]?.priceUsd && (
+                              <div className="text-xs text-muted-foreground text-right mt-1">
+                                ${(parseFloat(liqAmountB) * tokenPrices[pool.tokenB].priceUsd!).toFixed(2)} USD
+                              </div>
+                            )}
                           </div>
 
                           {/* Pool Info */}
