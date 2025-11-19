@@ -8,11 +8,22 @@ export function createServer() {
 
   // CORS configuration - Allow Vercel frontend and development
   const corsOptions = {
-    origin: [
-      'https://dexkeeta.vercel.app',
-      'http://localhost:8080',
-      'http://localhost:3000',
-    ],
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow requests with no origin (like mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+
+      // Allow localhost for development
+      if (origin.includes('localhost')) return callback(null, true);
+
+      // Allow all Vercel deployments (production + preview)
+      if (origin.includes('vercel.app')) return callback(null, true);
+
+      // Allow Render.com (for backend-to-backend calls if needed)
+      if (origin.includes('onrender.com')) return callback(null, true);
+
+      // Reject all other origins
+      callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
