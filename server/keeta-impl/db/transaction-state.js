@@ -1,7 +1,7 @@
 // Transaction state tracking for two-transaction flows
 // Prevents user fund loss by tracking and recovering failed transactions
 
-import { pool } from './pool.js';
+import { getDbPool } from './client.js';
 
 /**
  * Transaction states:
@@ -27,7 +27,7 @@ export async function createTransaction(type, params) {
   `;
 
   try {
-    const result = await pool.query(query, [
+    const result = await getDbPool().query(query, [
       type,
       params.userAddress,
       params.poolAddress,
@@ -53,7 +53,7 @@ export async function markTX1Complete(txId, tx1Hash) {
   `;
 
   try {
-    await pool.query(query, [txId, tx1Hash]);
+    await getDbPool().query(query, [txId, tx1Hash]);
     console.log(`✅ Marked TX1 complete: ${txId}`);
   } catch (error) {
     console.error('❌ Failed to mark TX1 complete:', error);
@@ -74,7 +74,7 @@ export async function markTX2Complete(txId, tx2Hash) {
   `;
 
   try {
-    await pool.query(query, [txId, tx2Hash]);
+    await getDbPool().query(query, [txId, tx2Hash]);
     console.log(`✅ Marked TX2 complete: ${txId}`);
   } catch (error) {
     console.error('❌ Failed to mark TX2 complete:', error);
@@ -95,7 +95,7 @@ export async function markTX2Failed(txId, errorMessage) {
   `;
 
   try {
-    await pool.query(query, [txId, errorMessage]);
+    await getDbPool().query(query, [txId, errorMessage]);
     console.error(`🚨 Marked TX2 failed: ${txId} - ${errorMessage}`);
 
     // TODO: Send alert to monitoring system
@@ -118,7 +118,7 @@ export async function getFailedTransactions() {
   `;
 
   try {
-    const result = await pool.query(query);
+    const result = await getDbPool().query(query);
     return result.rows;
   } catch (error) {
     console.error('❌ Failed to get failed transactions:', error);
@@ -139,7 +139,7 @@ export async function getStuckTransactions() {
   `;
 
   try {
-    const result = await pool.query(query);
+    const result = await getDbPool().query(query);
     return result.rows;
   } catch (error) {
     console.error('❌ Failed to get stuck transactions:', error);
@@ -160,7 +160,7 @@ export async function markRecovered(txId, recoveryTxHash) {
   `;
 
   try {
-    await pool.query(query, [txId, recoveryTxHash]);
+    await getDbPool().query(query, [txId, recoveryTxHash]);
     console.log(`✅ Marked transaction recovered: ${txId}`);
   } catch (error) {
     console.error('❌ Failed to mark transaction recovered:', error);
