@@ -4,6 +4,7 @@ import express from 'express';
 import { getPoolManager } from '../contracts/PoolManager.js';
 import { getOpsClient, accountFromAddress } from '../utils/client.js';
 import { markTX2Complete, markTX2Failed } from '../db/transaction-state.js';
+import { executeTX2WithRetry } from '../utils/retry.js';
 
 const router = express.Router();
 
@@ -217,43 +218,49 @@ router.post('/complete', async (req, res) => {
     const pool = await getPoolInstance(poolManager, poolAddress);
 
     // TX2: Pool sends tokenOut to user (using SEND_ON_BEHALF)
+    // Wrapped in retry logic to handle transient failures
     console.log('📝 TX2: Pool sends tokenOut to user (via SEND_ON_BEHALF)...');
 
     const tokenOutAccount = accountFromAddress(tokenOut);
     const userAccount = accountFromAddress(userAddress);
     const poolAccount = accountFromAddress(poolAddress);
 
-    const tx2Builder = opsClient.initBuilder();
+    // Execute TX2 with automatic retry on failure
+    const { tx2Hash } = await executeTX2WithRetry(async () => {
+      const tx2Builder = opsClient.initBuilder();
 
-    // Pool sends tokenOut to user using SEND_ON_BEHALF
-    // { account: poolAccount } tells OPS to send on behalf of pool account
-    tx2Builder.send(
-      userAccount,
-      BigInt(amountOut),
-      tokenOutAccount,
-      undefined,
-      { account: poolAccount }
-    );
+      // Pool sends tokenOut to user using SEND_ON_BEHALF
+      // { account: poolAccount } tells OPS to send on behalf of pool account
+      tx2Builder.send(
+        userAccount,
+        BigInt(amountOut),
+        tokenOutAccount,
+        undefined,
+        { account: poolAccount }
+      );
 
-    await opsClient.publishBuilder(tx2Builder);
+      await opsClient.publishBuilder(tx2Builder);
 
-    // Extract TX2 block hash
-    let tx2Hash = null;
-    if (tx2Builder.blocks && tx2Builder.blocks.length > 0) {
-      const block = tx2Builder.blocks[0];
-      if (block && block.hash) {
-        if (typeof block.hash === 'string') {
-          tx2Hash = block.hash.toUpperCase();
-        } else if (block.hash.toString) {
-          const hashStr = block.hash.toString();
-          if (hashStr.match(/^[0-9A-Fa-f]+$/)) {
-            tx2Hash = hashStr.toUpperCase();
-          } else if (block.hash.toString('hex')) {
-            tx2Hash = block.hash.toString('hex').toUpperCase();
+      // Extract TX2 block hash
+      let hash = null;
+      if (tx2Builder.blocks && tx2Builder.blocks.length > 0) {
+        const block = tx2Builder.blocks[0];
+        if (block && block.hash) {
+          if (typeof block.hash === 'string') {
+            hash = block.hash.toUpperCase();
+          } else if (block.hash.toString) {
+            const hashStr = block.hash.toString();
+            if (hashStr.match(/^[0-9A-Fa-f]+$/)) {
+              hash = hashStr.toUpperCase();
+            } else if (block.hash.toString('hex')) {
+              hash = block.hash.toString('hex').toUpperCase();
+            }
           }
         }
       }
-    }
+
+      return { tx2Hash: hash };
+    }, transactionId);
 
     console.log(`✅ TX2 completed: ${tx2Hash || 'no hash'}`);
 
