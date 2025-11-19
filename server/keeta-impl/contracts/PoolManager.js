@@ -24,14 +24,31 @@ export class PoolManager {
   async initialize() {
     await this.loadPools();
 
-    // Discover pools on-chain (in case persistent storage was lost)
-    // This ensures pools survive server restarts/redeployments
-    // DISABLED: This blocks server startup if Keeta API is slow
-    // TODO: Move to background job or lazy-load on-demand
-    // await this.discoverPoolsOnChain();
+    console.log(`✅ PoolManager initialized with ${this.pools.size} pools from database`);
 
-    console.log(`✅ PoolManager initialized with ${this.pools.size} pools`);
+    // Discover pools on-chain in background (non-blocking)
+    // This ensures pools are synced with blockchain without blocking server startup
+    this.discoverPoolsInBackground();
+
     return this;
+  }
+
+  /**
+   * Run blockchain pool discovery in background (non-blocking)
+   * Starts after a delay to allow server to become responsive first
+   */
+  discoverPoolsInBackground() {
+    // Start discovery after 5 seconds (server is responsive immediately)
+    setTimeout(async () => {
+      console.log('🔍 Starting background blockchain pool discovery...');
+      try {
+        await this.discoverPoolsOnChain();
+        console.log(`✅ Background pool discovery complete: ${this.pools.size} total pools`);
+      } catch (err) {
+        console.error('⚠️ Background pool discovery failed (non-critical):', err.message);
+        console.log('   Server continues using database/file-based pool data');
+      }
+    }, 5000);
   }
 
   /**
