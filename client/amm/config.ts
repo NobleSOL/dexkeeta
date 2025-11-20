@@ -1,6 +1,15 @@
 // HARDCODED for localhost development - env vars don't reload properly in Vite dev mode
 // For production (Vercel), these will be overridden by environment variables
 // Updated with Base Mainnet deployment (verified contracts)
+
+// V0 Contracts (Protocol fee collection, no router fees)
+export const SILVERBACK_FACTORY_V0 = (import.meta as any).env?.VITE_SB_FACTORY_V0 || ""; // Deploy this first
+export const SILVERBACK_ROUTER_V0 = (import.meta as any).env?.VITE_SB_ROUTER_V0 || ""; // For direct Silverback swaps (0% router fee)
+
+// Unified Router (With 0.3% router fee for aggregated swaps)
+export const SILVERBACK_ROUTER_UNIFIED = (import.meta as any).env?.VITE_SB_ROUTER_UNIFIED || "0x4752Ba5DbC23F44d87826276Bf6fD6B1c372AD24";
+
+// Legacy addresses (deprecated, use V0 instead)
 export const SILVERBACK_V2_FACTORY = "0xd0918593070682AA60Ef6367FAd43A20acaEE94d";
 export const SILVERBACK_V2_ROUTER = "0x565cBf0F3eAdD873212Db91896e9a548f6D64894";
 
