@@ -2,7 +2,7 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/home/taylo/dexkeeta/contracts/SilverbackFactory.sol": {
-      "lastModificationDate": 1763502656926,
+      "lastModificationDate": 1763754451751,
       "contentHash": "2c417af0d9eabd2c067b9b89e9e57201",
       "sourceName": "contracts/SilverbackFactory.sol",
       "solcConfig": {
@@ -80,8 +80,8 @@
       ]
     },
     "/home/taylo/dexkeeta/contracts/SilverbackPair.sol": {
-      "lastModificationDate": 1763502656926,
-      "contentHash": "86becc7fa075d90716335922874a30c7",
+      "lastModificationDate": 1763754419683,
+      "contentHash": "a31e889d968042b8f1b6fb0220d524d3",
       "sourceName": "contracts/SilverbackPair.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -191,89 +191,8 @@
         "UQ112x112"
       ]
     },
-    "/home/taylo/dexkeeta/contracts/SilverbackPairV0.sol": {
-      "lastModificationDate": 1763730587449,
-      "contentHash": "9473d337f2f864fc5fc8314ca501baa0",
-      "sourceName": "contracts/SilverbackPairV0.sol",
-      "solcConfig": {
-        "version": "0.8.20",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "./interfaces.sol",
-        "./libraries/Math.sol",
-        "./libraries/UQ112x112.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "SilverbackPairV0"
-      ]
-    },
-    "/home/taylo/dexkeeta/contracts/SilverbackUnifiedRouterV0.sol": {
-      "lastModificationDate": 1763732544822,
-      "contentHash": "662d4f1215aaa905a7c26a8a14774fd5",
-      "sourceName": "contracts/SilverbackUnifiedRouterV0.sol",
-      "solcConfig": {
-        "version": "0.8.20",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "./interfaces.sol",
-        "./SilverbackLibraryV0.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "IERC20Permit",
-        "IWETH9",
-        "SilverbackUnifiedRouterV0"
-      ]
-    },
     "/home/taylo/dexkeeta/contracts/SilverbackLibrary.sol": {
-      "lastModificationDate": 1763502656926,
+      "lastModificationDate": 1763754484451,
       "contentHash": "15d42c779894dad26038b3359624d021",
       "sourceName": "contracts/SilverbackLibrary.sol",
       "solcConfig": {
@@ -353,8 +272,8 @@
       ]
     },
     "/home/taylo/dexkeeta/contracts/SilverbackRouter.sol": {
-      "lastModificationDate": 1763502656926,
-      "contentHash": "0b263d8e0e430479b8758b58d036ae3c",
+      "lastModificationDate": 1763754510489,
+      "contentHash": "a3fb0f2fcb330e3a25f0d1e467de70fd",
       "sourceName": "contracts/SilverbackRouter.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -388,47 +307,9 @@
         "^0.8.20"
       ],
       "artifacts": [
+        "IERC20Permit",
         "IWETH9",
         "SilverbackRouter"
-      ]
-    },
-    "/home/taylo/dexkeeta/contracts/SilverbackFactoryV0.sol": {
-      "lastModificationDate": 1763730562275,
-      "contentHash": "17459381b5ee8375fe6a15ab5950d9bb",
-      "sourceName": "contracts/SilverbackFactoryV0.sol",
-      "solcConfig": {
-        "version": "0.8.20",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "./interfaces.sol",
-        "./SilverbackPairV0.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "SilverbackFactoryV0"
       ]
     },
     "/home/taylo/dexkeeta/contracts/mocks/FlashLoanAttacker.sol": {
@@ -578,45 +459,6 @@
         "MockWETH"
       ]
     },
-    "/home/taylo/dexkeeta/contracts/SilverbackLibraryV0.sol": {
-      "lastModificationDate": 1763732308452,
-      "contentHash": "5f6d70e86883eb8ffad0d1d7f5f9619a",
-      "sourceName": "contracts/SilverbackLibraryV0.sol",
-      "solcConfig": {
-        "version": "0.8.20",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "./interfaces.sol",
-        "./SilverbackPairV0.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "SilverbackLibraryV0"
-      ]
-    },
     "/home/taylo/dexkeeta/contracts/mocks/MockTaxToken.sol": {
       "lastModificationDate": 1763733743620,
       "contentHash": "0537bba7be7d53ac704e93581c8f49de",
@@ -652,6 +494,44 @@
       "artifacts": [
         "IRouter",
         "MockTaxToken"
+      ]
+    },
+    "/home/taylo/dexkeeta/contracts/mocks/SimpleToken.sol": {
+      "lastModificationDate": 1763749369045,
+      "contentHash": "26799b21a5c3054b25b1adda63db1b43",
+      "sourceName": "contracts/mocks/SimpleToken.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../interfaces.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "SimpleToken"
       ]
     }
   }

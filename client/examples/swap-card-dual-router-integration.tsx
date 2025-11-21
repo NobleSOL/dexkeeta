@@ -3,8 +3,8 @@
  *
  * This example shows how to modify the existing Index.tsx swap card to use
  * the SwapRouterService for intelligent routing between:
- * - RouterV0 (Direct Silverback swaps, 0% router fee)
- * - UnifiedRouter (Aggregated swaps, 0.3% router fee)
+ * - Silverback V2 Router (Direct Silverback swaps, 0.25% pair + 0.05% protocol = 0.30% total)
+ * - UnifiedRouter (Aggregated swaps, OpenOcean integration)
  *
  * KEY CHANGES FROM CURRENT IMPLEMENTATION:
  * 1. Import and instantiate SwapRouterService
@@ -16,7 +16,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAccount, usePublicClient, useWriteContract, useChainId } from "wagmi";
 import { createSwapRouter, SwapRoute } from "@/lib/swap-router";
-import { SILVERBACK_FACTORY_V0, SILVERBACK_ROUTER_V0, SILVERBACK_ROUTER_UNIFIED } from "@/amm/config";
+import { SILVERBACK_V2_FACTORY, SILVERBACK_V2_ROUTER, SILVERBACK_UNIFIED_ROUTER } from "@/amm/config";
 import { ERC20_ABI } from "@/lib/erc20";
 import { ethers } from "ethers";
 import type { Address } from "viem";
@@ -51,9 +51,9 @@ export default function SwapCardExample() {
     const provider = new ethers.BrowserProvider(window.ethereum as any);
 
     return createSwapRouter(
-      SILVERBACK_FACTORY_V0 as Address,
-      SILVERBACK_ROUTER_V0 as Address,
-      SILVERBACK_ROUTER_UNIFIED as Address,
+      SILVERBACK_V2_FACTORY as Address,
+      SILVERBACK_V2_ROUTER as Address,
+      SILVERBACK_UNIFIED_ROUTER as Address,
       provider
     );
   }, [publicClient]);
@@ -304,9 +304,9 @@ export default function SwapCardExample() {
  * 7. ✅ Convert between wagmi and ethers types
  *
  * ENVIRONMENT VARIABLES NEEDED:
- * - VITE_SB_FACTORY_V0=<deployed factory address>
- * - VITE_SB_ROUTER_V0=<deployed router address>
- * - VITE_SB_ROUTER_UNIFIED=0x4752Ba5DbC23F44d87826276Bf6fD6B1c372AD24
+ * - VITE_SB_V2_FACTORY=0x9cd714C51586B52DD56EbD19E3676de65eBf44Ae (Base Mainnet)
+ * - VITE_SB_V2_ROUTER=0x07d00debE946d9183A4dB7756A8A54582c6F205b (Base Mainnet)
+ * - VITE_SB_UNIFIED_ROUTER=0x565cBf0F3eAdD873212Db91896e9a548f6D64894 (Aggregator)
  *
  * BENEFITS OF THIS APPROACH:
  * ✅ Automatic price comparison between Silverback and aggregators

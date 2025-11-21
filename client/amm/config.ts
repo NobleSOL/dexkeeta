@@ -1,17 +1,14 @@
 // HARDCODED for localhost development - env vars don't reload properly in Vite dev mode
 // For production (Vercel), these will be overridden by environment variables
-// Updated with Base Mainnet deployment (verified contracts)
+// Updated with Base Mainnet deployment (verified contracts - deployed Nov 2024)
 
-// V0 Contracts (Protocol fee collection, no router fees)
-export const SILVERBACK_FACTORY_V0 = (import.meta as any).env?.VITE_SB_FACTORY_V0 || ""; // Deploy this first
-export const SILVERBACK_ROUTER_V0 = (import.meta as any).env?.VITE_SB_ROUTER_V0 || ""; // For direct Silverback swaps (0% router fee)
+// Silverback V2 Contracts (0.25% pair fee + 0.05% router fee = 0.30% total)
+// These are the NEW contracts for Silverback pools
+export const SILVERBACK_V2_FACTORY = (import.meta as any).env?.VITE_SB_V2_FACTORY || "0x9cd714C51586B52DD56EbD19E3676de65eBf44Ae";
+export const SILVERBACK_V2_ROUTER = (import.meta as any).env?.VITE_SB_V2_ROUTER || "0x07d00debE946d9183A4dB7756A8A54582c6F205b";
 
-// Unified Router (With 0.3% router fee for aggregated swaps)
-export const SILVERBACK_ROUTER_UNIFIED = (import.meta as any).env?.VITE_SB_ROUTER_UNIFIED || "0x4752Ba5DbC23F44d87826276Bf6fD6B1c372AD24";
-
-// Legacy addresses (deprecated, use V0 instead)
-export const SILVERBACK_V2_FACTORY = "0xd0918593070682AA60Ef6367FAd43A20acaEE94d";
-export const SILVERBACK_V2_ROUTER = "0x565cBf0F3eAdD873212Db91896e9a548f6D64894";
+// Unified Router (for aggregator routing - OpenOcean, etc.)
+export const SILVERBACK_UNIFIED_ROUTER = (import.meta as any).env?.VITE_SB_UNIFIED_ROUTER || "0x565cBf0F3eAdD873212Db91896e9a548f6D64894";
 
 // If using Uniswap V3-like periphery until Silverback V3 is deployed
 export const V3_POSITION_MANAGER = (import.meta as any).env?.VITE_V3_NFPM || ""; // NonfungiblePositionManager

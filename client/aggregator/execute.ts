@@ -174,10 +174,10 @@ export async function executeSwapViaSilverbackV2(
   quotedOut: bigint,
   slippageBps: number,
 ): Promise<{ txHash: string }> {
-  // Use UnifiedRouter for fee collection
-  const router = unifiedRouterAddress();
-  console.log("🔍 Using UnifiedRouter address:", router);
-  if (!router) throw new Error("Set VITE_SB_UNIFIED_ROUTER env to the deployed UnifiedRouter address");
+  // Use Silverback V2 Router for Silverback pool swaps (0.25% pair + 0.05% protocol fee)
+  const router = v2RouterAddress();
+  console.log("🔍 Using Silverback V2 Router address:", router);
+  if (!router) throw new Error("Set VITE_SB_V2_ROUTER env to the deployed Silverback V2 Router address");
 
   const deadline = BigInt(Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_SEC);
   const isNativeIn = inToken.address === NATIVE_SENTINEL;
@@ -188,7 +188,7 @@ export async function executeSwapViaSilverbackV2(
   const outAddr = isNativeOut ? WETH_ADDRESS : (outToken.address as Address);
   const path = [inAddr, outAddr];
 
-  // UnifiedRouter collects 0.3% fee automatically and routes through V2
+  // Silverback V2 Router collects 0.05% protocol fee + pairs collect 0.25% LP fee = 0.30% total
   // We pass full amount - router deducts fee internally
 
   // Calculate minOut with slippage (applied to quoted output)
