@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { IERC20, ISilverbackCallee, ISilverbackPair } from "./interfaces.sol";
+import { IERC20, ISilverbackCallee, ISilverbackPair, ISilverbackFactory } from "./interfaces.sol";
 import { Math } from "./libraries/Math.sol";
 import { UQ112x112 } from "./libraries/UQ112x112.sol";
 

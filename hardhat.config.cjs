@@ -13,7 +13,7 @@ module.exports = {
   },
   networks: {
     "base-sepolia": {
-      url: RPC_URL || "https://base-sepolia.g.alchemy.com/v2/YOUR_ALCHEMY_KEY",
+      url: RPC_URL || "https://sepolia.base.org",
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
       chainId: 84532,
     },

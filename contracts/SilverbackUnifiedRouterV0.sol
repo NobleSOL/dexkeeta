@@ -36,6 +36,9 @@ contract SilverbackUnifiedRouterV0 {
     }
 
     // ========== STORAGE ==========
+    address public immutable factory;
+    address public immutable WETH;
+    address public constant NATIVE = address(0);
 
     // Reentrancy guard
     uint256 private constant UNLOCKED = 1;
@@ -155,7 +158,7 @@ contract SilverbackUnifiedRouterV0 {
             (bool ok, bytes memory ret) = p.target.call{value: p.amountIn}(p.data);
             require(ok, _revertMsg(ret));
 
-            emit SwapForwarded(msg.sender, p.inToken, p.outToken, p.amountIn, fee, p.target);
+            emit SwapForwarded(msg.sender, p.inToken, p.outToken, p.amountIn, p.target);
         }
         // Handle ERC20 input
         else {
@@ -167,7 +170,7 @@ contract SilverbackUnifiedRouterV0 {
             (bool ok, bytes memory ret) = p.target.call(p.data);
             require(ok, _revertMsg(ret));
 
-            emit SwapForwarded(msg.sender, p.inToken, p.outToken, p.amountIn, fee, p.target);
+            emit SwapForwarded(msg.sender, p.inToken, p.outToken, p.amountIn, p.target);
         }
 
         // Sweep output tokens if requested
@@ -335,12 +338,11 @@ contract SilverbackUnifiedRouterV0 {
     ) external payable nonReentrant ensure(deadline) returns (uint[] memory amounts) {
         require(path[0] == WETH, "INVALID_PATH");
 
-        // Collect fee in native ETH
-        // Wrap remaining ETH to WETH
-        IWETH9(WETH).deposit{value: amountIn}();
+        // Wrap ETH to WETH (no fee collection)
+        IWETH9(WETH).deposit{value: msg.value}();
 
         // Calculate amounts and execute swap
-        amounts = SilverbackLibrary.getAmountsOut(factory, amountIn, path);
+        amounts = SilverbackLibrary.getAmountsOut(factory, msg.value, path);
         require(amounts[amounts.length - 1] >= amountOutMin, "INSUFFICIENT_OUTPUT");
         _safeTransfer(WETH, SilverbackLibrary.pairFor(factory, path[0], path[1]), amounts[0]);
         _swap(amounts, path, to);

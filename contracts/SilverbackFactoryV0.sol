@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { ISilverbackFactory, ISilverbackPairV0 } from "./interfaces.sol";
+import { ISilverbackFactory, ISilverbackPair } from "./interfaces.sol";
 import { SilverbackPairV0 } from "./SilverbackPairV0.sol";
 
 contract SilverbackFactoryV0 is ISilverbackFactory {
@@ -30,7 +30,7 @@ contract SilverbackFactoryV0 is ISilverbackFactory {
         assembly {
             pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
         }
-        ISilverbackPairV0(pair).initialize(token0, token1);
+        ISilverbackPair(pair).initialize(token0, token1);
         getPair[token0][token1] = pair;
         getPair[token1][token0] = pair;
         allPairs.push(pair);
