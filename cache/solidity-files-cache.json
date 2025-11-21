@@ -232,8 +232,8 @@
       ]
     },
     "/home/taylo/dexkeeta/contracts/SilverbackUnifiedRouterV0.sol": {
-      "lastModificationDate": 1763730791360,
-      "contentHash": "5343bbedd72cdfcbe240aaf949d15482",
+      "lastModificationDate": 1763732544822,
+      "contentHash": "662d4f1215aaa905a7c26a8a14774fd5",
       "sourceName": "contracts/SilverbackUnifiedRouterV0.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -261,7 +261,7 @@
       },
       "imports": [
         "./interfaces.sol",
-        "./SilverbackLibrary.sol"
+        "./SilverbackLibraryV0.sol"
       ],
       "versionPragmas": [
         "^0.8.20"
@@ -576,6 +576,82 @@
       ],
       "artifacts": [
         "MockWETH"
+      ]
+    },
+    "/home/taylo/dexkeeta/contracts/SilverbackLibraryV0.sol": {
+      "lastModificationDate": 1763732308452,
+      "contentHash": "5f6d70e86883eb8ffad0d1d7f5f9619a",
+      "sourceName": "contracts/SilverbackLibraryV0.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./interfaces.sol",
+        "./SilverbackPairV0.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "SilverbackLibraryV0"
+      ]
+    },
+    "/home/taylo/dexkeeta/contracts/mocks/MockTaxToken.sol": {
+      "lastModificationDate": 1763733743620,
+      "contentHash": "0537bba7be7d53ac704e93581c8f49de",
+      "sourceName": "contracts/mocks/MockTaxToken.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "IRouter",
+        "MockTaxToken"
       ]
     }
   }
