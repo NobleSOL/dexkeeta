@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import { IERC20, ISilverbackFactory, ISilverbackPair } from "./interfaces.sol";
-import { SilverbackLibrary } from "./SilverbackLibrary.sol";
+import { SilverbackLibraryV0 } from "./SilverbackLibraryV0.sol";
 
 interface IWETH9 is IERC20 {
     function deposit() external payable;
@@ -226,16 +226,16 @@ contract SilverbackUnifiedRouterV0 {
         uint amountAMin,
         uint amountBMin
     ) internal view returns (uint amountA, uint amountB) {
-        (uint reserveA, uint reserveB) = SilverbackLibrary.getReserves(factory, tokenA, tokenB);
+        (uint reserveA, uint reserveB) = SilverbackLibraryV0.getReserves(factory, tokenA, tokenB);
         if (reserveA == 0 && reserveB == 0) {
             (amountA, amountB) = (amountADesired, amountBDesired);
         } else {
-            uint amountBOptimal = SilverbackLibrary.quote(amountADesired, reserveA, reserveB);
+            uint amountBOptimal = SilverbackLibraryV0.quote(amountADesired, reserveA, reserveB);
             if (amountBOptimal <= amountBDesired) {
                 require(amountBOptimal >= amountBMin, "INSUFFICIENT_B");
                 (amountA, amountB) = (amountADesired, amountBOptimal);
             } else {
-                uint amountAOptimal = SilverbackLibrary.quote(amountBDesired, reserveB, reserveA);
+                uint amountAOptimal = SilverbackLibraryV0.quote(amountBDesired, reserveB, reserveA);
                 require(amountAOptimal >= amountAMin, "INSUFFICIENT_A");
                 (amountA, amountB) = (amountAOptimal, amountBDesired);
             }
@@ -287,7 +287,7 @@ contract SilverbackUnifiedRouterV0 {
         address pair = ISilverbackFactory(factory).getPair(tokenA, tokenB);
         _safeTransferFrom(pair, msg.sender, pair, liquidity);
         (uint amount0, uint amount1) = ISilverbackPair(pair).burn(to);
-        (address token0, ) = SilverbackLibrary.sortTokens(tokenA, tokenB);
+        (address token0, ) = SilverbackLibraryV0.sortTokens(tokenA, tokenB);
         (amountA, amountB) = tokenA == token0 ? (amount0, amount1) : (amount1, amount0);
         require(amountA >= amountAMin, "INSUFFICIENT_A");
         require(amountB >= amountBMin, "INSUFFICIENT_B");
@@ -304,7 +304,7 @@ contract SilverbackUnifiedRouterV0 {
         address pair = ISilverbackFactory(factory).getPair(token, WETH);
         _safeTransferFrom(pair, msg.sender, pair, liquidity);
         (uint amount0, uint amount1) = ISilverbackPair(pair).burn(address(this));
-        (address token0, ) = SilverbackLibrary.sortTokens(token, WETH);
+        (address token0, ) = SilverbackLibraryV0.sortTokens(token, WETH);
         (amountToken, amountETH) = token == token0 ? (amount0, amount1) : (amount1, amount0);
         require(amountToken >= amountTokenMin, "INSUFFICIENT_TOKEN");
         require(amountETH >= amountETHMin, "INSUFFICIENT_ETH");
@@ -324,9 +324,9 @@ contract SilverbackUnifiedRouterV0 {
         // Collect fee from user in input token
         _safeTransferFrom(path[0], msg.sender, address(this), amountIn);
         // Calculate amounts and execute swap
-        amounts = SilverbackLibrary.getAmountsOut(factory, amountIn, path);
+        amounts = SilverbackLibraryV0.getAmountsOut(factory, amountIn, path);
         require(amounts[amounts.length - 1] >= amountOutMin, "INSUFFICIENT_OUTPUT");
-        _safeTransfer(path[0], SilverbackLibrary.pairFor(factory, path[0], path[1]), amountIn);
+        _safeTransfer(path[0], SilverbackLibraryV0.pairFor(factory, path[0], path[1]), amountIn);
         _swap(amounts, path, to);
     }
 
@@ -342,9 +342,9 @@ contract SilverbackUnifiedRouterV0 {
         IWETH9(WETH).deposit{value: msg.value}();
 
         // Calculate amounts and execute swap
-        amounts = SilverbackLibrary.getAmountsOut(factory, msg.value, path);
+        amounts = SilverbackLibraryV0.getAmountsOut(factory, msg.value, path);
         require(amounts[amounts.length - 1] >= amountOutMin, "INSUFFICIENT_OUTPUT");
-        _safeTransfer(WETH, SilverbackLibrary.pairFor(factory, path[0], path[1]), amounts[0]);
+        _safeTransfer(WETH, SilverbackLibraryV0.pairFor(factory, path[0], path[1]), amounts[0]);
         _swap(amounts, path, to);
     }
 
@@ -360,9 +360,9 @@ contract SilverbackUnifiedRouterV0 {
         // Collect fee from user in input token
         _safeTransferFrom(path[0], msg.sender, address(this), amountIn);
         // Calculate amounts and execute swap
-        amounts = SilverbackLibrary.getAmountsOut(factory, amountIn, path);
+        amounts = SilverbackLibraryV0.getAmountsOut(factory, amountIn, path);
         require(amounts[amounts.length - 1] >= amountOutMin, "INSUFFICIENT_OUTPUT");
-        _safeTransfer(path[0], SilverbackLibrary.pairFor(factory, path[0], path[1]), amountIn);
+        _safeTransfer(path[0], SilverbackLibraryV0.pairFor(factory, path[0], path[1]), amountIn);
         _swap(amounts, path, address(this));
 
         // Unwrap WETH and send ETH to user
@@ -374,15 +374,15 @@ contract SilverbackUnifiedRouterV0 {
     function _swap(uint[] memory amounts, address[] memory path, address _to) internal {
         for (uint i; i < path.length - 1; i++) {
             (address input, address output) = (path[i], path[i + 1]);
-            (address token0, ) = SilverbackLibrary.sortTokens(input, output);
+            (address token0, ) = SilverbackLibraryV0.sortTokens(input, output);
             uint amountOut = amounts[i + 1];
             (uint amount0Out, uint amount1Out) = input == token0
                 ? (uint(0), amountOut)
                 : (amountOut, uint(0));
             address to = i < path.length - 2
-                ? SilverbackLibrary.pairFor(factory, output, path[i + 2])
+                ? SilverbackLibraryV0.pairFor(factory, output, path[i + 2])
                 : _to;
-            ISilverbackPair(SilverbackLibrary.pairFor(factory, input, output)).swap(
+            ISilverbackPair(SilverbackLibraryV0.pairFor(factory, input, output)).swap(
                 amount0Out,
                 amount1Out,
                 to,
