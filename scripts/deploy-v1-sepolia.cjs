@@ -23,24 +23,24 @@ async function main() {
   console.log("Router feeBps:", FEE_BPS, "(0.05%)");
   console.log();
 
-  // Deploy FactoryV1
-  console.log("📦 Deploying FactoryV1...");
-  const FactoryV1 = await hre.ethers.getContractFactory("SilverbackFactoryV1");
-  const factory = await FactoryV1.deploy(deployer.address); // feeToSetter
+  // Deploy Factory
+  console.log("📦 Deploying Factory...");
+  const Factory = await hre.ethers.getContractFactory("SilverbackFactory");
+  const factory = await Factory.deploy(deployer.address); // feeToSetter
   await factory.waitForDeployment();
   const factoryAddress = await factory.getAddress();
 
-  console.log("✅ FactoryV1 deployed:", factoryAddress);
+  console.log("✅ Factory deployed:", factoryAddress);
   console.log("   feeToSetter:", deployer.address);
   console.log();
 
   // Wait a moment for contract to be indexed
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  // Deploy RouterV1
-  console.log("📦 Deploying RouterV1...");
-  const RouterV1 = await hre.ethers.getContractFactory("SilverbackUnifiedRouterV1");
-  const router = await RouterV1.deploy(
+  // Deploy Router
+  console.log("📦 Deploying Router...");
+  const Router = await hre.ethers.getContractFactory("SilverbackRouter");
+  const router = await Router.deploy(
     FEE_RECIPIENT,
     FEE_BPS,
     factoryAddress,
@@ -49,7 +49,7 @@ async function main() {
   await router.waitForDeployment();
   const routerAddress = await router.getAddress();
 
-  console.log("✅ RouterV1 deployed:", routerAddress);
+  console.log("✅ Router deployed:", routerAddress);
   console.log("   feeRecipient:", FEE_RECIPIENT);
   console.log("   feeBps:", FEE_BPS);
   console.log("   factory:", factoryAddress);
@@ -63,8 +63,8 @@ async function main() {
 
   console.log("📋 Contract Addresses:");
   console.log("─".repeat(70));
-  console.log("FactoryV1:", factoryAddress);
-  console.log("RouterV1: ", routerAddress);
+  console.log("Factory:", factoryAddress);
+  console.log("Router: ", routerAddress);
   console.log();
 
   console.log("💡 Fee Structure:");

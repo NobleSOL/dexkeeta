@@ -173,9 +173,10 @@ contract SilverbackPair is ISilverbackPair {
         uint256 amount1In = balance1 > (_reserve1 - amount1Out) ? balance1 - (_reserve1 - amount1Out) : 0;
         require(amount0In > 0 || amount1In > 0, "INSUFFICIENT_INPUT");
         {
-            uint256 balance0Adjusted = balance0 * 1000 - amount0In * 3;
-            uint256 balance1Adjusted = balance1 * 1000 - amount1In * 3;
-            require(balance0Adjusted * balance1Adjusted >= uint256(_reserve0) * _reserve1 * 1_000_000, "K");
+            // 0.25% LP fee (25 basis points)
+            uint256 balance0Adjusted = balance0 * 10000 - amount0In * 25;
+            uint256 balance1Adjusted = balance1 * 10000 - amount1In * 25;
+            require(balance0Adjusted * balance1Adjusted >= uint256(_reserve0) * _reserve1 * 100_000_000, "K");
         }
         _update(balance0, balance1);
         emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to);
